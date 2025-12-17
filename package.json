@@ -11,9 +11,12 @@
   "dependencies": {
     "next": "16.0.10",
     "react": "19.2.1",
-    "react-dom": "19.2.1"
+    "react-dom": "19.2.1",
+     "lucide-react": "^0.263.1"
   },
   "devDependencies": {
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
     "@tailwindcss/postcss": "^4",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
