@@ -8,6 +8,8 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Search } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
+
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -98,11 +100,12 @@ export default function AddSchedulePage() {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
     
     setSaving(true);
+    const toastId = toast.loading('Creating schedule...');
     try {
       const scheduleData = {
         name: formData.name,
@@ -122,11 +125,11 @@ export default function AddSchedulePage() {
         });
       }
       
-      alert('Schedule created successfully!');
+      toast.success('Schedule created successfully!', { id: toastId });
       router.push('/schedules');
     } catch (error) {
       console.error('Error creating schedule:', error);
-      alert('Failed to create schedule: ' + error.message);
+       toast.error(error.message || 'Failed to create schedule', { id: toastId });
     }
     setSaving(false);
   };

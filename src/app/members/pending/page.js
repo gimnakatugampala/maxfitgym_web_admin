@@ -8,6 +8,7 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function PendingMembersPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -34,26 +35,66 @@ export default function PendingMembersPage() {
       setMembers((data || []).filter(m => !m.is_active));
     } catch (error) {
       console.error('Error fetching members:', error);
+      toast.error('Failed to load pending members');
     }
     setLoading(false);
   };
 
-  const handleAction = async (memberId, action) => {
-    const message = action === 'activate' 
-      ? 'Are you sure you want to activate this member?' 
-      : 'Are you sure you want to reject this member?';
-      
-    if (confirm(message)) {
-      try {
-        await supabaseApi.updateMember(memberId, { 
-          is_active: action === 'activate' 
-        });
-        fetchPendingMembers();
-      } catch (error) {
-        console.error('Error updating member:', error);
-        alert('Failed to update member status');
-      }
-    }
+  const handleAction = async (memberId, memberName, action) => {
+    const actionText = action === 'activate' ? 'activate' : 'reject';
+    
+    toast((t) => (
+      <div className="flex flex-col space-y-3">
+        <div>
+          <p className="font-semibold text-gray-900">
+            {action === 'activate' ? 'Activate Member' : 'Reject Member'}
+          </p>
+          <p className="text-sm text-gray-600 mt-1">
+            Are you sure you want to {actionText} <span className="font-semibold">{memberName}</span>?
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const toastId = toast.loading(`${action === 'activate' ? 'Activating' : 'Rejecting'} member...`);
+              try {
+                await supabaseApi.updateMember(memberId, { 
+                  is_active: action === 'activate' 
+                });
+                toast.success(
+                  `Member ${action === 'activate' ? 'activated' : 'rejected'} successfully`, 
+                  { id: toastId }
+                );
+                fetchPendingMembers();
+              } catch (error) {
+                console.error('Error updating member:', error);
+                toast.error('Failed to update member status', { id: toastId });
+              }
+            }}
+            className={`flex-1 ${
+              action === 'activate' 
+                ? 'bg-green-600 hover:bg-green-700' 
+                : 'bg-red-600 hover:bg-red-700'
+            } text-white px-4 py-2 rounded-lg transition text-sm font-medium`}
+          >
+            {action === 'activate' ? 'Activate' : 'Reject'}
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 8000,
+      style: {
+        background: '#fff',
+        minWidth: '320px',
+      },
+    });
   };
 
   if (loading) {
@@ -126,14 +167,14 @@ export default function PendingMembersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <button
-                          onClick={() => handleAction(member.id, 'activate')}
+                          onClick={() => handleAction(member.id, member.full_name, 'activate')}
                           className="text-green-600 hover:text-green-900 inline-flex items-center space-x-1"
                         >
                           <CheckCircle size={16} />
                           <span>Activate</span>
                         </button>
                         <button
-                          onClick={() => handleAction(member.id, 'reject')}
+                          onClick={() => handleAction(member.id, member.full_name, 'reject')}
                           className="text-red-600 hover:text-red-900 inline-flex items-center space-x-1"
                         >
                           <XCircle size={16} />

@@ -9,6 +9,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Video, Upload, Image as ImageIcon, Dumbbell, Target, Loader } from 'lucide-react';
 import Link from 'next/link';
 import { getYouTubeId } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function AddWorkoutPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -53,13 +54,13 @@ export default function AddWorkoutPage() {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file (JPG, PNG, GIF, etc.)');
+        toast.error('Please select an image file (JPG, PNG, GIF, etc.)');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        toast.error('Image size should be less than 5MB');
         return;
       }
 
@@ -118,9 +119,14 @@ export default function AddWorkoutPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateForm()){
+      toast.error('Please fill in all required fields correctly');
+      return;
+    }
     
     setSaving(true);
+      const toastId = toast.loading('Creating workout...');
+
     try {
       let imageUrl = null;
       
@@ -132,7 +138,7 @@ export default function AddWorkoutPage() {
           console.log('Image uploaded successfully:', imageUrl);
         } catch (uploadError) {
           console.error('Error uploading image:', uploadError);
-          alert('Failed to upload image. Please try again.');
+          toast.error('Failed to upload image. Please try again.', { id: toastId });
           setSaving(false);
           setUploading(false);
           return;
@@ -162,11 +168,11 @@ export default function AddWorkoutPage() {
         });
       }
       
-      alert('Workout created successfully!');
+      toast.success('Workout created successfully!', { id: toastId });
       router.push('/workouts');
     } catch (error) {
       console.error('Error creating workout:', error);
-      alert('Failed to create workout: ' + error.message);
+      toast.error(error.message || 'Failed to create workout', { id: toastId });
     }
     setSaving(false);
   };

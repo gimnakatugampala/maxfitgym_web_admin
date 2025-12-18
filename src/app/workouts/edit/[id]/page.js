@@ -9,6 +9,8 @@ import LoadingSpinner from '../../../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Dumbbell, Target, Loader } from 'lucide-react';
 import Link from 'next/link';
 import { getYouTubeId } from '@/lib/utils';
+import toast from 'react-hot-toast';
+
 
 export default function EditWorkoutPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -84,13 +86,13 @@ export default function EditWorkoutPage() {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file (JPG, PNG, GIF, etc.)');
+        toast.error('Please select an image file (JPG, PNG, GIF, etc.)');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        toast.error('Image size should be less than 5MB');
         return;
       }
 
@@ -150,9 +152,13 @@ export default function EditWorkoutPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields correctly');
+      return
+    }
     
     setSaving(true);
+    const toastId = toast.loading('Updating workout...');
     try {
       let imageUrl = existingImageUrl;
       
@@ -169,7 +175,7 @@ export default function EditWorkoutPage() {
           console.log('Image uploaded successfully:', imageUrl);
         } catch (uploadError) {
           console.error('Error uploading image:', uploadError);
-          alert('Failed to upload image. Please try again.');
+          toast.error('Failed to upload image. Please try again.', { id: toastId });
           setSaving(false);
           setUploading(false);
           return;
@@ -199,11 +205,11 @@ export default function EditWorkoutPage() {
         });
       }
       
-      alert('Workout updated successfully!');
+      toast.success('Workout updated successfully!', { id: toastId });
       router.push('/workouts');
     } catch (error) {
       console.error('Error updating workout:', error);
-      alert('Failed to update workout: ' + error.message);
+      toast.error(error.message || 'Failed to update workout', { id: toastId });
     }
     setSaving(false);
   };

@@ -9,6 +9,7 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Plus, Edit, Trash2, Search, Video } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function WorkoutsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -34,20 +35,53 @@ export default function WorkoutsPage() {
       setWorkouts(data || []);
     } catch (error) {
       console.error('Error fetching workouts:', error);
+      toast.error('Failed to load workouts');
     }
     setLoading(false);
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this workout?')) {
-      try {
-        await supabaseApi.deleteWorkout(id);
-        fetchWorkouts();
-      } catch (error) {
-        console.error('Error deleting workout:', error);
-        alert('Failed to delete workout');
-      }
-    }
+const handleDelete = async (id, name) => {
+    toast((t) => (
+      <div className="flex flex-col space-y-3">
+        <div>
+          <p className="font-semibold text-gray-900">Delete Workout</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Are you sure you want to delete <span className="font-semibold">{name}</span>?
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const toastId = toast.loading('Deleting workout...');
+              try {
+                await supabaseApi.deleteWorkout(id);
+                toast.success('Workout deleted successfully', { id: toastId });
+                fetchWorkouts();
+              } catch (error) {
+                console.error('Error deleting workout:', error);
+                toast.error('Failed to delete workout', { id: toastId });
+              }
+            }}
+            className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 8000,
+      style: {
+        background: '#fff',
+        minWidth: '320px',
+      },
+    });
   };
 
   const filteredWorkouts = workouts.filter(workout =>

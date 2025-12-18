@@ -8,6 +8,8 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Search } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
+
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -69,6 +71,7 @@ export default function EditSchedulePage() {
       setWorkouts(allWorkouts || []);
     } catch (error) {
       console.error('Error fetching data:', error);
+      toast.error('Failed to load schedule data');
     }
     setLoading(false);
   };
@@ -123,11 +126,13 @@ export default function EditSchedulePage() {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert('Please fill in all required fields');
+       toast.error('Please fill in all required fields');
       return;
     }
     
     setSaving(true);
+     const toastId = toast.loading('Updating schedule...');
+
     try {
       const scheduleData = {
         name: formData.name,
@@ -147,11 +152,11 @@ export default function EditSchedulePage() {
         });
       }
       
-      alert('Schedule updated successfully!');
+      toast.success('Schedule updated successfully!', { id: toastId });
       router.push('/schedules');
     } catch (error) {
       console.error('Error updating schedule:', error);
-      alert('Failed to update schedule: ' + error.message);
+     toast.error(error.message || 'Failed to update schedule', { id: toastId });
     }
     setSaving(false);
   };

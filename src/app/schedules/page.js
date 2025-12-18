@@ -9,6 +9,7 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Plus, Edit, Trash2, Search, Calendar } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function SchedulesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -34,20 +35,53 @@ export default function SchedulesPage() {
       setSchedules(data || []);
     } catch (error) {
       console.error('Error fetching schedules:', error);
+      toast.error('Failed to load schedules');
     }
     setLoading(false);
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this schedule?')) {
-      try {
-        await supabaseApi.updateSchedule(id, { is_deleted: true });
-        fetchSchedules();
-      } catch (error) {
-        console.error('Error deleting schedule:', error);
-        alert('Failed to delete schedule');
-      }
-    }
+   const handleDelete = async (id, name) => {
+    toast((t) => (
+      <div className="flex flex-col space-y-3">
+        <div>
+          <p className="font-semibold text-gray-900">Delete Schedule</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Are you sure you want to delete <span className="font-semibold">{name}</span>?
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const toastId = toast.loading('Deleting schedule...');
+              try {
+                await supabaseApi.updateSchedule(id, { is_deleted: true });
+                toast.success('Schedule deleted successfully', { id: toastId });
+                fetchSchedules();
+              } catch (error) {
+                console.error('Error deleting schedule:', error);
+                toast.error('Failed to delete schedule', { id: toastId });
+              }
+            }}
+            className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 8000,
+      style: {
+        background: '#fff',
+        minWidth: '320px',
+      },
+    });
   };
 
   const filteredSchedules = schedules.filter(schedule =>
