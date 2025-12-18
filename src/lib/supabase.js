@@ -1,3 +1,6 @@
+import bcrypt from 'bcryptjs';
+
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -102,22 +105,27 @@ async request(endpoint, options = {}) {
   // ------------------------------------------------------------------
   // CREATE ADMIN (Insert into public.users table)
   // ------------------------------------------------------------------
-  async createAdmin(data) {
-    console.log('Creating admin with data:', data);
+ async createAdmin(data) {
+    console.log('Creating admin...');
 
     try {
-      // 1. Prepare Payload matching public.users schema
+      // 1. Encrypt the password
+      // We generate a "salt" and then hash the password.
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(data.password, salt);
+
+      // 2. Prepare Payload with the HASHED password
       const payload = {
         full_name: data.full_name,
         email: data.email,
-        password: data.password, // Note: Storing plain text password is risky. Ideally use Auth or Hash it.
-        role: 'admin',           // Default per your schema
-        is_active: true,         // Default per your schema
-        avatar_url: '',          // Default empty string
+        password: hashedPassword, // <--- Now securely encrypted
+        role: 'admin',
+        is_active: true,
+        avatar_url: '',
         created_at: new Date().toISOString()
       };
 
-      // 2. Send POST request
+      // 3. Send POST request to Supabase
       const result = await this.request('/users', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -131,7 +139,6 @@ async request(endpoint, options = {}) {
 
     } catch (error) {
       console.error('Error in createAdmin:', error);
-      // specific check for unique violation (email already exists)
       if (error.message && error.message.includes('duplicate key')) {
         throw new Error('This email address is already registered.');
       }

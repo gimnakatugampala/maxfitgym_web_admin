@@ -9,19 +9,20 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "lucide-react": "^0.263.1",
     "next": "16.0.10",
     "react": "19.2.1",
     "react-dom": "19.2.1",
-     "lucide-react": "^0.263.1",
-      "react-hot-toast": "^2.4.1"
+    "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
     "@tailwindcss/postcss": "^4",
+    "autoprefixer": "^10.4.16",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
+    "postcss": "^8.4.32",
     "tailwindcss": "^4"
   }
 }
