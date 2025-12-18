@@ -8,6 +8,7 @@ import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { Save, ArrowLeft, User, Mail, Lock, Shield } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function AddAdminPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -66,9 +67,14 @@ export default function AddAdminPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields correctly');
+      return;
+    }
     
     setSaving(true);
+    const toastId = toast.loading('Creating administrator...');
+    
     try {
       await supabaseApi.createAdmin({
         email: formData.email,
@@ -77,11 +83,11 @@ export default function AddAdminPage() {
         role: 'admin',
       });
       
-      alert('Admin created successfully!');
+      toast.success('Administrator created successfully!', { id: toastId });
       router.push('/admin');
     } catch (error) {
       console.error('Error creating admin:', error);
-      alert('Failed to create admin: ' + error.message);
+      toast.error(error.message || 'Failed to create administrator', { id: toastId });
     }
     setSaving(false);
   };

@@ -12,7 +12,8 @@
     "next": "16.0.10",
     "react": "19.2.1",
     "react-dom": "19.2.1",
-     "lucide-react": "^0.263.1"
+     "lucide-react": "^0.263.1",
+      "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",

@@ -7,8 +7,9 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { Plus, Trash2, Search, Shield, Mail, Calendar, User, Filter, CheckCircle, XCircle, MoreVertical } from 'lucide-react';
+import { Plus, Trash2, Search, Shield, Mail, Calendar, User, Filter, CheckCircle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import toast from 'react-hot-toast';
 
 export default function AdminListPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -18,6 +19,7 @@ export default function AdminListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -36,20 +38,53 @@ export default function AdminListPage() {
       setAdmins(data || []);
     } catch (error) {
       console.error('Error fetching admins:', error);
+      toast.error('Failed to load administrators');
     }
     setLoading(false);
   };
 
-  const handleDelete = async (id) => {
-    if (confirm('Are you sure you want to delete this admin?')) {
-      try {
-        await supabaseApi.updateAdmin(id, { is_deleted: true });
-        fetchAdmins();
-      } catch (error) {
-        console.error('Error deleting admin:', error);
-        alert('Failed to delete admin');
-      }
-    }
+  const handleDelete = async (id, name) => {
+    toast((t) => (
+      <div className="flex flex-col space-y-3">
+        <div>
+          <p className="font-semibold text-gray-900">Delete Administrator</p>
+          <p className="text-sm text-gray-600 mt-1">
+            Are you sure you want to delete <span className="font-semibold">{name}</span>?
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const toastId = toast.loading('Deleting administrator...');
+              try {
+                await supabaseApi.updateAdmin(id, { is_deleted: true });
+                toast.success('Administrator deleted successfully', { id: toastId });
+                fetchAdmins();
+              } catch (error) {
+                console.error('Error deleting admin:', error);
+                toast.error('Failed to delete administrator', { id: toastId });
+              }
+            }}
+            className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition text-sm font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 8000,
+      style: {
+        background: '#fff',
+        minWidth: '320px',
+      },
+    });
   };
 
   const filteredAdmins = admins.filter(admin => {
@@ -312,7 +347,7 @@ export default function AdminListPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end space-x-2">
                             <button
-                              onClick={() => handleDelete(admin.id)}
+                              onClick={() => handleDelete(admin.id, admin.full_name)}
                               className="text-red-600 hover:text-red-900 p-2 hover:bg-red-50 rounded-lg transition-colors"
                               title="Delete admin"
                             >
