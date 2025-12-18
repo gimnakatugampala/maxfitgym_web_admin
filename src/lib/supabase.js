@@ -13,33 +13,33 @@ export const supabaseApi = {
 async request(endpoint, options = {}) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
     
-    // ... existing fetch code ...
+    // Fix CORS: Always include proper headers
+    const headers = {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+      ...options.headers,
+    };
+    
     const response = await fetch(`${SUPABASE_URL}/rest/v1${endpoint}`, {
       ...options,
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-        ...options.headers,
-      },
+      headers,
     });
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Unknown error' }));
       
-      // --- ADD THIS FIX ---
       // If unauthorized (401) or Token Expired, log them out
       if (response.status === 401 || (error.message && error.message.includes("JWT expired"))) {
         console.warn("Session expired. Logging out...");
         if (typeof window !== 'undefined') {
           localStorage.removeItem('supabase_token');
           localStorage.removeItem('supabase_user');
-          window.location.href = '/'; // Force redirect to Login page
+          window.location.href = '/';
         }
-        return null; // Stop the crash
+        return null;
       }
-      // ---------------------
 
       throw new Error(error.message || 'API request failed');
     }
@@ -131,8 +131,6 @@ async request(endpoint, options = {}) {
     return data[0];
   },
 
-
-  
   async createWorkout(data) {
     return this.request('/workout', {
       method: 'POST',
@@ -147,68 +145,133 @@ async request(endpoint, options = {}) {
     });
   },
 
- async deleteWorkout(id) {
-    // First, get the workout to check if it has an image
-    const workout = await this.getWorkout(id);
+ // SOFT DELETE: Set is_deleted = true using PUT (Fetch -> Modify -> Save)
+  async deleteWorkout(id) {
+    console.log('Starting workout soft deletion for ID:', id);
     
-    // Delete the image if it exists
-    if (workout && workout.image_url) {
-      try {
-        await this.deleteWorkoutImage(workout.image_url);
-      } catch (error) {
-        console.warn('Failed to delete workout image:', error);
-        // Continue with workout deletion even if image deletion fails
+    try {
+      // Step 1: Get the workout details first
+      const workout = await this.getWorkout(id);
+      
+      if (!workout) {
+        throw new Error('Workout not found');
       }
+      
+      // Step 2: Delete the image if it exists
+      // We wrap this in try/catch so missing images don't stop the deletion
+      if (workout.image_url) {
+        try {
+          await this.deleteWorkoutImage(workout.image_url);
+        } catch (error) {
+          console.warn('Image delete failed or image missing (continuing):', error);
+        }
+      }
+
+      // Step 3: Soft delete related videos
+      // Since PUT replaces the whole row, we cannot do a "Bulk Update".
+      // We must fetch the videos, loop through them, and PUT them back one by one.
+      try {
+        const videos = await this.getWorkoutVideos(id);
+        
+        // Loop through and soft-delete each video
+        for (const video of videos) {
+            const videoUpdate = { ...video, is_deleted: true };
+            // IMPORTANT: If 'workout' or other joined tables are in the video object, remove them
+            // But getWorkoutVideos usually returns flat data. 
+            
+            await this.request(`/workout_video?id=eq.${video.id}`, {
+                method: 'PUT',
+                body: JSON.stringify(videoUpdate)
+            });
+        }
+        console.log('Videos soft deleted successfully');
+      } catch (error) {
+        console.warn('Failed to soft delete videos:', error);
+      }
+      
+      // Step 4: Soft delete the workout itself
+      console.log('Step 4: Soft deleting workout record...');
+      
+      // Prepare the object for PUT
+      const workoutUpdate = { ...workout, is_deleted: true };
+      
+      // CRITICAL: Remove the "workout_type" object. 
+      // Your getWorkout() fetches joined data (e.g. { id: 1, workout_type: { name: 'Cardio' } })
+      // If you send that joined object back in a PUT, Supabase will reject it.
+      delete workoutUpdate.workout_type; 
+
+      const result = await this.request(`/workout?id=eq.${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(workoutUpdate),
+      });
+      
+      console.log('Workout soft deleted successfully!');
+      return result;
+
+    } catch (error) {
+      console.error('Error in deleteWorkout:', error);
+      throw error;
     }
-    
-    // Soft delete the workout
-    return this.request(`/workout?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_deleted: true }),
-    });
   },
 
    async deleteWorkoutImage(imageUrl) {
     if (!imageUrl) return;
     
     // Extract the file path from the URL
-    // URL format: https://project.supabase.co/storage/v1/object/public/bucket/file
-    const urlParts = imageUrl.split('/');
-    const bucket = urlParts[urlParts.length - 2]; // Should be 'workout-images'
-    const fileName = urlParts[urlParts.length - 1];
-    
-    if (!bucket || !fileName) {
-      throw new Error('Invalid image URL format');
-    }
-    
-    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
-
-    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${fileName}`, {
-      method: 'DELETE',
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
-      },
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Failed to delete image' }));
+    // URL format: https://project.supabase.co/storage/v1/object/public/workout-images/filename.jpg
+    try {
+      const url = new URL(imageUrl);
+      const pathParts = url.pathname.split('/');
       
-      // Handle token expiration
-      if (response.status === 401) {
-        console.warn("Session expired during image deletion");
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('supabase_token');
-          localStorage.removeItem('supabase_user');
-          window.location.href = '/';
-        }
-        throw new Error('Session expired. Please log in again.');
+      // Find 'public' in the path, then bucket is next, and rest is the file path
+      const publicIndex = pathParts.indexOf('public');
+      if (publicIndex === -1 || publicIndex >= pathParts.length - 1) {
+        throw new Error('Invalid image URL format - cannot find bucket');
       }
       
-      throw new Error(error.message || 'Failed to delete image');
-    }
+      const bucket = pathParts[publicIndex + 1]; // Should be 'workout-images'
+      const fileName = pathParts.slice(publicIndex + 2).join('/'); // Rest of the path is the filename
+      
+      if (!bucket || !fileName) {
+        throw new Error('Invalid image URL format - missing bucket or filename');
+      }
+      
+      console.log('Deleting image:', { bucket, fileName, fullUrl: imageUrl });
+      
+      const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
 
-    return true;
+      const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${fileName}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Failed to delete image' }));
+        
+        // Handle token expiration
+        if (response.status === 401) {
+          console.warn("Session expired during image deletion");
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('supabase_token');
+            localStorage.removeItem('supabase_user');
+            window.location.href = '/';
+          }
+          throw new Error('Session expired. Please log in again.');
+        }
+        
+        console.warn('Image deletion failed:', error);
+        throw new Error(error.message || 'Failed to delete image');
+      }
+
+      console.log('Image deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('Error in deleteWorkoutImage:', error);
+      throw error;
+    }
   },
 
   // Workout Video endpoints
@@ -224,10 +287,23 @@ async request(endpoint, options = {}) {
   },
 
   async deleteWorkoutVideos(workoutId) {
-    return this.request(`/workout_video?workout_id=eq.${workoutId}`, {
-      method: 'PATCH',
+    console.log('Soft deleting videos for workout:', workoutId);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
+    
+    // Using POST with X-HTTP-Method-Override to bypass CORS PATCH restriction
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/workout_video?workout_id=eq.${workoutId}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+        'X-HTTP-Method-Override': 'PATCH',
+      },
       body: JSON.stringify({ is_deleted: true }),
     });
+    
+    return response.ok;
   },
 
   // Schedule endpoints
@@ -438,4 +514,3 @@ async request(endpoint, options = {}) {
   },
   
 };
-
