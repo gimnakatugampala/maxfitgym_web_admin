@@ -39,7 +39,7 @@ export default function MembersPage() {
   };
 
   const filteredMembers = members.filter(member =>
-    member.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (member.first_name + ' ' + member.last_name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.membership_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     member.phone_number?.includes(searchTerm)
   );
@@ -96,10 +96,13 @@ export default function MembersPage() {
                       Membership ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Full Name
+                      Name
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Phone Number
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Platform
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Member Since
@@ -122,13 +125,16 @@ export default function MembersPage() {
                         {member.membership_id}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {member.full_name}
+                        {member.first_name} {member.last_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {member.phone_number}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(member.created_at)}
+                        {member.platform?.name || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(member.created_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${

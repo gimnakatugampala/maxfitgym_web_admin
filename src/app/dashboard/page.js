@@ -34,23 +34,8 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [members, workouts, schedules] = await Promise.all([
-        supabaseApi.getMembers(),
-        supabaseApi.getWorkouts(),
-        supabaseApi.getSchedules(),
-      ]);
-
-      const activeMembers = members?.filter(m => m.is_active).length || 0;
-      const pendingMembers = members?.filter(m => !m.is_active).length || 0;
-
-      setStats({
-        totalMembers: members?.length || 0,
-        activeMembers,
-        pendingMembers,
-        totalWorkouts: workouts?.length || 0,
-        totalSchedules: schedules?.length || 0,
-        todayAttendance: 0, // Would need attendance data
-      });
+      const dashboardStats = await supabaseApi.getDashboardStats();
+      setStats(dashboardStats);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     }
@@ -76,6 +61,7 @@ export default function DashboardPage() {
       icon: Users,
       color: 'bg-blue-500',
       textColor: 'text-blue-600',
+      link: '/members',
     },
     {
       title: 'Active Members',
@@ -83,6 +69,7 @@ export default function DashboardPage() {
       icon: UserCheck,
       color: 'bg-green-500',
       textColor: 'text-green-600',
+      link: '/members',
     },
     {
       title: 'Pending Members',
@@ -90,6 +77,7 @@ export default function DashboardPage() {
       icon: UserX,
       color: 'bg-yellow-500',
       textColor: 'text-yellow-600',
+      link: '/members/pending',
     },
     {
       title: 'Total Workouts',
@@ -97,6 +85,7 @@ export default function DashboardPage() {
       icon: Dumbbell,
       color: 'bg-purple-500',
       textColor: 'text-purple-600',
+      link: '/workouts',
     },
     {
       title: 'Total Schedules',
@@ -104,6 +93,7 @@ export default function DashboardPage() {
       icon: Calendar,
       color: 'bg-indigo-500',
       textColor: 'text-indigo-600',
+      link: '/schedules',
     },
     {
       title: "Today's Attendance",
@@ -111,6 +101,7 @@ export default function DashboardPage() {
       icon: TrendingUp,
       color: 'bg-pink-500',
       textColor: 'text-pink-600',
+      link: '/members/attendance',
     },
   ];
 
@@ -131,7 +122,11 @@ export default function DashboardPage() {
             {statCards.map((card, index) => {
               const Icon = card.icon;
               return (
-                <div key={index} className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+                <div 
+                  key={index} 
+                  onClick={() => router.push(card.link)}
+                  className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow cursor-pointer"
+                >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-gray-500 text-sm font-medium">{card.title}</p>
