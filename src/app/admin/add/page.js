@@ -22,15 +22,15 @@ export default function AddAdminPage() {
   const [errors, setErrors] = useState({});
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     setLoading(false);
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      setLoading(false);
+    }
+  }, [router]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

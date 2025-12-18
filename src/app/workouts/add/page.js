@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Video } from 'lucide-react';
 import Link from 'next/link';
 import { getYouTubeId } from '@/lib/utils';
@@ -26,15 +26,15 @@ export default function AddWorkoutPage() {
   const [errors, setErrors] = useState({});
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     setLoading(false);
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      setLoading(false);
+    }
+  }, [router]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;

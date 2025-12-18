@@ -18,15 +18,15 @@ export default function SchedulesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchSchedules();
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchSchedules();
+    }
+  }, [router]);
 
   const fetchSchedules = async () => {
     try {

@@ -27,15 +27,15 @@ export default function EditWorkoutPage() {
   const router = useRouter();
   const params = useParams();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchWorkout();
-  //   }
-  // }, [router, params.id]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchWorkout();
+    }
+  }, [router, params.id]);
 
   const fetchWorkout = async () => {
     try {

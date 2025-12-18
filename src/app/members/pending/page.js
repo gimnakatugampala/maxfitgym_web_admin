@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { CheckCircle, XCircle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -16,15 +16,15 @@ export default function PendingMembersPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchPendingMembers();
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchPendingMembers();
+    }
+  }, [router]);
 
   const fetchPendingMembers = async () => {
     try {

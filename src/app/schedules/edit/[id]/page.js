@@ -29,15 +29,15 @@ export default function EditSchedulePage() {
   const router = useRouter();
   const params = useParams();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchData();
-  //   }
-  // }, [router, params.id]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchData();
+    }
+  }, [router, params.id]);
 
   const fetchData = async () => {
     try {

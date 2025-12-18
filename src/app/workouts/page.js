@@ -18,15 +18,15 @@ export default function WorkoutsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchWorkouts();
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchWorkouts();
+    }
+  }, [router]);
 
   const fetchWorkouts = async () => {
     try {

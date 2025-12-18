@@ -18,15 +18,15 @@ export default function MemberDetailsPage() {
   const router = useRouter();
   const params = useParams();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchMember();
-  //   }
-  // }, [router, params.id]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchMember();
+    }
+  }, [router, params.id]);
 
   const fetchMember = async () => {
     try {

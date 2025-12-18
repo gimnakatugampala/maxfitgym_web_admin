@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { Save, ArrowLeft, Plus, X, Search } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,15 +28,15 @@ export default function AddSchedulePage() {
   const [errors, setErrors] = useState({});
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchWorkouts();
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchWorkouts();
+    }
+  }, [router]);
 
   const fetchWorkouts = async () => {
     try {

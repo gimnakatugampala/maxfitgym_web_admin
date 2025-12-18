@@ -18,15 +18,15 @@ export default function AdminListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     fetchAdmins();
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      fetchAdmins();
+    }
+  }, [router]);
 
   const fetchAdmins = async () => {
     try {

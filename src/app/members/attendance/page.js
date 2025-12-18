@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
-import LoadingSpinner from '../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import { Calendar, Search } from 'lucide-react';
 import { formatDate, formatTime } from '@/lib/utils';
 
@@ -17,15 +17,15 @@ export default function AttendancePage() {
   const [attendance, setAttendance] = useState([]);
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const currentUser = supabaseApi.getUser();
-  //   if (!currentUser) {
-  //     router.push('/login');
-  //   } else {
-  //     setUser(currentUser);
-  //     setLoading(false);
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    const currentUser = supabaseApi.getUser();
+    if (!currentUser) {
+      router.push('/login');
+    } else {
+      setUser(currentUser);
+      setLoading(false);
+    }
+  }, [router]);
 
   // Mock attendance data - in production, fetch from API
   const mockAttendance = {
