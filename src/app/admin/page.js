@@ -58,7 +58,7 @@ export default function AdminListPage() {
               toast.dismiss(t.id);
               const toastId = toast.loading('Deleting administrator...');
               try {
-                await supabaseApi.updateAdmin(id, { is_deleted: true });
+                await supabaseApi.updateAdmin(id, { is_active: false });
                 toast.success('Administrator deleted successfully', { id: toastId });
                 fetchAdmins();
               } catch (error) {

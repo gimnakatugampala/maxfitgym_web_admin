@@ -93,12 +93,41 @@ async request(endpoint, options = {}) {
     return this.request('/users?select=*&is_active=eq.true&order=created_at.desc');
   },
 
+// ------------------------------------------------------------------
+  // UPDATE ADMIN (Using PUT to bypass CORS PATCH issues)
+  // ------------------------------------------------------------------
   async updateAdmin(id, updates) {
-    return this.request(`/users?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(updates),
-    });
+    console.log('Updating admin ID:', id);
+
+    try {
+      // 1. Fetch current admin data
+      // We need the full object because PUT replaces everything
+      const users = await this.request(`/users?id=eq.${id}&select=*`);
+      const currentUser = users?.[0];
+
+      if (!currentUser) {
+        throw new Error('Admin user not found');
+      }
+
+      // 2. Prepare the full payload
+      // Merge existing data with your updates
+      const payload = { ...currentUser, ...updates };
+
+      // 3. Send PUT request
+      // This tells Supabase to overwrite the row with this ID
+      const result = await this.request(`/users?id=eq.${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('Error in updateAdmin:', error);
+      throw error;
+    }
   },
+  
 
   // In src/lib/supabase.js inside the supabaseApi object:
 
