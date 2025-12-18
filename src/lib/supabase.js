@@ -131,11 +131,60 @@ async request(endpoint, options = {}) {
     return data[0];
   },
 
+ // ------------------------------------------------------------------
+  // CREATE WORKOUT (Auto-generate 'code' column: W_001)
+  // ------------------------------------------------------------------
   async createWorkout(data) {
-    return this.request('/workout', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    console.log('Step 1: Generating Workout Code...');
+
+    try {
+      // 1. Fetch the last workout to find the highest code
+      // We select the 'code' column specifically
+      const lastRecord = await this.request('/workout?select=code&order=id.desc&limit=1');
+
+      let nextNum = 1;
+
+      // If a previous record exists with a code, parse it
+      if (lastRecord && lastRecord.length > 0 && lastRecord[0].code) {
+        // Expected format: "W_001"
+        const parts = lastRecord[0].code.split('_'); 
+        if (parts.length === 2 && !isNaN(parts[1])) {
+          nextNum = parseInt(parts[1], 10) + 1;
+        }
+      }
+
+      // 2. Format the new code (e.g., 1 -> "W_001", 15 -> "W_015")
+      const newCode = `W_${String(nextNum).padStart(3, '0')}`;
+      console.log('Generated Code:', newCode);
+
+      // 3. Validate and Prepare Payload
+      const payload = {
+        ...data,
+        sets: Number(data.sets),
+        reps: Number(data.reps),
+        workout_type_id: Number(data.workout_type_id),
+        is_deleted: false,
+        code: newCode // <--- Saving to your existing 'code' column
+      };
+
+      console.log('Step 2: Sending POST request to Supabase...');
+      
+      const result = await this.request('/workout', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (!result || result.length === 0) {
+        throw new Error('Workout created but no data returned. Check RLS policies.');
+      }
+
+      console.log('Step 3: Workout created successfully!', result[0]);
+      return result;
+
+    } catch (error) {
+      console.error('CRITICAL ERROR in createWorkout:', error);
+      throw error;
+    }
   },
 
   async updateWorkout(id, data) {
