@@ -114,6 +114,8 @@ async request(endpoint, options = {}) {
     return data[0];
   },
 
+
+  
   async createWorkout(data) {
     return this.request('/workout', {
       method: 'POST',
@@ -289,6 +291,32 @@ async request(endpoint, options = {}) {
     });
   },
 
+  async uploadWorkoutImage(file) {
+    const bucket = 'workout-images'; // IMPORTANT: You must create this bucket in Supabase
+    const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
+
+    // 1. Upload the file
+    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${fileName}`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+        'Content-Type': file.type,
+      },
+      body: file,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+      throw new Error(error.message || 'Failed to upload image');
+    }
+
+    // 2. Get the Public URL
+    // Format: https://project.supabase.co/storage/v1/object/public/bucket/file
+    return `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${fileName}`;
+  },
+
   // Dashboard Stats
   async getDashboardStats() {
     try {
@@ -322,4 +350,6 @@ async request(endpoint, options = {}) {
       };
     }
   },
+  
 };
+
