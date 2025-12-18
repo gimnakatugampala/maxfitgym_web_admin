@@ -104,9 +104,26 @@ async request(endpoint, options = {}) {
     });
   },
 
-  // Workout endpoints
+
+ // Workout endpoints
   async getWorkouts() {
-    return this.request('/workout?select=*,workout_type(workout_type)&is_deleted=eq.false&order=created_date.desc');
+    const workouts = await this.request('/workout?select=*,workout_type(id,workout_type)&is_deleted=eq.false&order=created_date.desc');
+    
+    // Fetch video counts for each workout
+    if (workouts && workouts.length > 0) {
+      const workoutsWithVideos = await Promise.all(
+        workouts.map(async (workout) => {
+          const videos = await this.request(`/workout_video?workout_id=eq.${workout.id}&is_deleted=eq.false&select=id`);
+          return {
+            ...workout,
+            video_count: videos?.length || 0
+          };
+        })
+      );
+      return workoutsWithVideos;
+    }
+    
+    return workouts;
   },
 
   async getWorkout(id) {
@@ -130,11 +147,68 @@ async request(endpoint, options = {}) {
     });
   },
 
-  async deleteWorkout(id) {
+ async deleteWorkout(id) {
+    // First, get the workout to check if it has an image
+    const workout = await this.getWorkout(id);
+    
+    // Delete the image if it exists
+    if (workout && workout.image_url) {
+      try {
+        await this.deleteWorkoutImage(workout.image_url);
+      } catch (error) {
+        console.warn('Failed to delete workout image:', error);
+        // Continue with workout deletion even if image deletion fails
+      }
+    }
+    
+    // Soft delete the workout
     return this.request(`/workout?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ is_deleted: true }),
     });
+  },
+
+   async deleteWorkoutImage(imageUrl) {
+    if (!imageUrl) return;
+    
+    // Extract the file path from the URL
+    // URL format: https://project.supabase.co/storage/v1/object/public/bucket/file
+    const urlParts = imageUrl.split('/');
+    const bucket = urlParts[urlParts.length - 2]; // Should be 'workout-images'
+    const fileName = urlParts[urlParts.length - 1];
+    
+    if (!bucket || !fileName) {
+      throw new Error('Invalid image URL format');
+    }
+    
+    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
+
+    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${bucket}/${fileName}`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Failed to delete image' }));
+      
+      // Handle token expiration
+      if (response.status === 401) {
+        console.warn("Session expired during image deletion");
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('supabase_token');
+          localStorage.removeItem('supabase_user');
+          window.location.href = '/';
+        }
+        throw new Error('Session expired. Please log in again.');
+      }
+      
+      throw new Error(error.message || 'Failed to delete image');
+    }
+
+    return true;
   },
 
   // Workout Video endpoints

@@ -86,11 +86,11 @@ export default function WorkoutsPage() {
     });
   };
 
-  const filteredWorkouts = workouts.filter(workout => {
+const filteredWorkouts = workouts.filter(workout => {
     const matchesSearch = 
       workout.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       workout.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      workout.workout_type?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+      workout.workout_type?.workout_type?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesType = filterType === 'all' || workout.workout_type?.workout_type === filterType;
     
