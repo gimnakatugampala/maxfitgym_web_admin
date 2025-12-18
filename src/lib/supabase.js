@@ -97,11 +97,46 @@ async request(endpoint, options = {}) {
     });
   },
 
+  // In src/lib/supabase.js inside the supabaseApi object:
+
+  // ------------------------------------------------------------------
+  // CREATE ADMIN (Insert into public.users table)
+  // ------------------------------------------------------------------
   async createAdmin(data) {
-    return this.request('/users', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    console.log('Creating admin with data:', data);
+
+    try {
+      // 1. Prepare Payload matching public.users schema
+      const payload = {
+        full_name: data.full_name,
+        email: data.email,
+        password: data.password, // Note: Storing plain text password is risky. Ideally use Auth or Hash it.
+        role: 'admin',           // Default per your schema
+        is_active: true,         // Default per your schema
+        avatar_url: '',          // Default empty string
+        created_at: new Date().toISOString()
+      };
+
+      // 2. Send POST request
+      const result = await this.request('/users', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (!result) {
+        throw new Error('Admin created but no data returned.');
+      }
+
+      return result;
+
+    } catch (error) {
+      console.error('Error in createAdmin:', error);
+      // specific check for unique violation (email already exists)
+      if (error.message && error.message.includes('duplicate key')) {
+        throw new Error('This email address is already registered.');
+      }
+      throw error;
+    }
   },
 
 
