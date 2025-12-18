@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
-import Sidebar from '@/components/Sidebar';
-import TopNav from '@/components/TopNav';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import Sidebar from '@/app/components/Sidebar';
+import TopNav from '@/app/components/TopNav';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { User, Phone, Calendar, Activity } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -18,15 +18,15 @@ export default function MemberDetailsPage() {
   const router = useRouter();
   const params = useParams();
 
-  useEffect(() => {
-    const currentUser = supabaseApi.getUser();
-    if (!currentUser) {
-      router.push('/login');
-    } else {
-      setUser(currentUser);
-      fetchMember();
-    }
-  }, [router, params.id]);
+  // useEffect(() => {
+  //   const currentUser = supabaseApi.getUser();
+  //   if (!currentUser) {
+  //     router.push('/login');
+  //   } else {
+  //     setUser(currentUser);
+  //     fetchMember();
+  //   }
+  // }, [router, params.id]);
 
   const fetchMember = async () => {
     try {

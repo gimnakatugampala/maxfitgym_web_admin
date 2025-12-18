@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabaseApi } from '@/lib/supabase';
-import Sidebar from '@/components/Sidebar';
-import TopNav from '@/components/TopNav';
-import LoadingSpinner from '@/components/LoadingSpinner';
+import Sidebar from '@/app/components/Sidebar';
+import TopNav from '@/app/components/TopNav';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { Eye, TrendingUp, Search } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -18,15 +18,15 @@ export default function MembersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
 
-  useEffect(() => {
-    const currentUser = supabaseApi.getUser();
-    if (!currentUser) {
-      router.push('/login');
-    } else {
-      setUser(currentUser);
-      fetchMembers();
-    }
-  }, [router]);
+  // useEffect(() => {
+  //   const currentUser = supabaseApi.getUser();
+  //   if (!currentUser) {
+  //     router.push('/login');
+  //   } else {
+  //     setUser(currentUser);
+  //     fetchMembers();
+  //   }
+  // }, [router]);
 
   const fetchMembers = async () => {
     try {
