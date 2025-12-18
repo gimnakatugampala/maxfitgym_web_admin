@@ -268,10 +268,10 @@ export default function EditWorkoutPage() {
                 <div className="space-y-6">
                   {/* Image Upload Section */}
                   <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 bg-gray-50">
-                    <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
-                      <ImageIcon size={18} className="mr-2 text-gray-500" />
-                      Workout Image
-                    </label>
+                  <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
+                    <ImageIcon size={18} className="mr-2 text-gray-500" />
+                    Workout Image
+                  </label>
                     
                     {!imagePreview ? (
                       <div className="text-center">

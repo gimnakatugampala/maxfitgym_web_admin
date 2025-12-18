@@ -187,11 +187,48 @@ async request(endpoint, options = {}) {
     }
   },
 
-  async updateWorkout(id, data) {
-    return this.request(`/workout?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+  // ------------------------------------------------------------------
+  // UPDATE WORKOUT (Using PUT to bypass CORS PATCH issues)
+  // ------------------------------------------------------------------
+  async updateWorkout(id, updates) {
+    console.log('Step 1: Starting update for ID:', id);
+
+    try {
+      // 1. Fetch the existing workout first
+      // We need the full object because PUT replaces everything
+      const currentData = await this.getWorkout(id);
+      
+      if (!currentData) {
+        throw new Error('Workout not found');
+      }
+
+      // 2. Merge the existing data with the new updates
+      const payload = { ...currentData, ...updates };
+
+      // 3. Clean the payload
+      // Remove joined tables (e.g., workout_type object) because they aren't columns in the 'workout' table
+      delete payload.workout_type; 
+      delete payload.video_count; // Remove if present
+      
+      // Ensure numeric fields are numbers (HTML forms often send strings)
+      if (payload.sets) payload.sets = Number(payload.sets);
+      if (payload.reps) payload.reps = Number(payload.reps);
+      if (payload.workout_type_id) payload.workout_type_id = Number(payload.workout_type_id);
+
+      // 4. Send PUT request
+      console.log('Step 2: Sending PUT request...');
+      const result = await this.request(`/workout?id=eq.${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+
+      console.log('Step 3: Workout updated successfully!');
+      return result;
+
+    } catch (error) {
+      console.error('CRITICAL ERROR in updateWorkout:', error);
+      throw error;
+    }
   },
 
  // SOFT DELETE: Set is_deleted = true using PUT (Fetch -> Modify -> Save)
