@@ -291,7 +291,7 @@ async request(endpoint, options = {}) {
     });
   },
 
-  async uploadWorkoutImage(file) {
+ async uploadWorkoutImage(file) {
     const bucket = 'workout-images'; // IMPORTANT: You must create this bucket in Supabase
     const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
     const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
@@ -309,6 +309,18 @@ async request(endpoint, options = {}) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'Upload failed' }));
+      
+      // Handle token expiration
+      if (response.status === 401 || (error.message && error.message.includes("exp"))) {
+        console.warn("Session expired during upload. Logging out...");
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('supabase_token');
+          localStorage.removeItem('supabase_user');
+          window.location.href = '/';
+        }
+        throw new Error('Session expired. Please log in again.');
+      }
+      
       throw new Error(error.message || 'Failed to upload image');
     }
 
