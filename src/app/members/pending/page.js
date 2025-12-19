@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
-import LoadingSpinner from '../../components/LoadingSpinner';
+import LoadingSpinner from '../../components/LoadingSpinner'; // Adjust path as needed
 import { CheckCircle, XCircle } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
@@ -29,10 +29,10 @@ export default function PendingMembersPage() {
 
   const fetchPendingMembers = async () => {
     try {
-      // In a real app, you'd filter by pending status
-      const data = await supabaseApi.getMembers();
-      // Filter for pending members (is_active = false or has pending flag)
-      setMembers((data || []).filter(m => !m.is_active));
+      setLoading(true);
+      // Use the new specific API call
+      const data = await supabaseApi.getPendingMembers();
+      setMembers(data || []);
     } catch (error) {
       console.error('Error fetching members:', error);
       toast.error('Failed to load pending members');
@@ -52,20 +52,30 @@ export default function PendingMembersPage() {
           <p className="text-sm text-gray-600 mt-1">
             Are you sure you want to {actionText} <span className="font-semibold">{memberName}</span>?
           </p>
+          {action === 'reject' && (
+             <p className="text-xs text-red-500 mt-1">This will remove the user application.</p>
+          )}
         </div>
         <div className="flex space-x-2">
           <button
             onClick={async () => {
               toast.dismiss(t.id);
               const toastId = toast.loading(`${action === 'activate' ? 'Activating' : 'Rejecting'} member...`);
+              
               try {
-                await supabaseApi.updateMember(memberId, { 
-                  is_active: action === 'activate' 
-                });
+                if (action === 'activate') {
+                    await supabaseApi.activateMember(memberId);
+                } else {
+                    // Rejecting implies soft-deleting the request
+                    await supabaseApi.rejectMember(memberId);
+                }
+
                 toast.success(
                   `Member ${action === 'activate' ? 'activated' : 'rejected'} successfully`, 
                   { id: toastId }
                 );
+                
+                // Refresh the list to remove the processed member
                 fetchPendingMembers();
               } catch (error) {
                 console.error('Error updating member:', error);
@@ -154,27 +164,29 @@ export default function PendingMembersPage() {
                         {index + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                        {member.membership_id}
+                        {member.membership_id || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {member.full_name}
+                         {/* Fixed: using first_name + last_name based on your schema */}
+                        {member.first_name} {member.last_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {member.phone_number}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(member.created_at)}
+                        {/* Fixed: using created_date based on your schema */}
+                        {formatDate(member.created_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                         <button
-                          onClick={() => handleAction(member.id, member.full_name, 'activate')}
+                          onClick={() => handleAction(member.id, `${member.first_name} ${member.last_name}`, 'activate')}
                           className="text-green-600 hover:text-green-900 inline-flex items-center space-x-1"
                         >
                           <CheckCircle size={16} />
                           <span>Activate</span>
                         </button>
                         <button
-                          onClick={() => handleAction(member.id, member.full_name, 'reject')}
+                          onClick={() => handleAction(member.id, `${member.first_name} ${member.last_name}`, 'reject')}
                           className="text-red-600 hover:text-red-900 inline-flex items-center space-x-1"
                         >
                           <XCircle size={16} />
@@ -189,7 +201,7 @@ export default function PendingMembersPage() {
             
             {members.length === 0 && (
               <div className="text-center py-12">
-                <p className="text-gray-500">No pending members</p>
+                <p className="text-gray-500">No pending members found.</p>
               </div>
             )}
           </div>

@@ -787,4 +787,20 @@ async updateWorkout(id, updates) {
   async getMembers() {
     return this.request('/members?select=*,platform(name)&is_deleted=eq.false&order=created_date.desc');
   },
+  // --- ADD THESE TO YOUR supabaseApi OBJECT ---
+
+  // Fetch only members who are NOT active and NOT deleted
+  async getPendingMembers() {
+    return this.request('/members?select=*,platform(name)&is_active=eq.false&is_deleted=eq.false&order=created_date.desc');
+  },
+
+  // Reject a member (Soft delete them so they disappear from the list)
+  async rejectMember(id) {
+    return this.updateMember(id, { is_deleted: true });
+  },
+
+  // Activate a member
+  async activateMember(id) {
+    return this.updateMember(id, { is_active: true });
+  },
 };
