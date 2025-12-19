@@ -6,7 +6,7 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { Save, ArrowLeft, X, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Target, AlertCircle, Clock } from 'lucide-react';
+import { Save, ArrowLeft, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Clock, AlertCircle, Coffee, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -22,7 +22,12 @@ export default function AddSchedulePage() {
     name: '',
     description: '',
   });
+  
+  // Schedule state: { "Monday": [workout1, ...], "Tuesday": [] }
   const [schedule, setSchedule] = useState({});
+  // Rest Days state: { "Monday": false, "Tuesday": true }
+  const [restDays, setRestDays] = useState({});
+
   const [draggedWorkout, setDraggedWorkout] = useState(null);
   const [draggedFromDay, setDraggedFromDay] = useState(null);
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -41,12 +46,15 @@ export default function AddSchedulePage() {
   }, [router]);
 
   useEffect(() => {
-    // Initialize empty schedule
+    // Initialize empty schedule and rest days
     const initialSchedule = {};
+    const initialRestDays = {};
     DAYS.forEach(day => {
       initialSchedule[day] = [];
+      initialRestDays[day] = false;
     });
     setSchedule(initialSchedule);
+    setRestDays(initialRestDays);
   }, []);
 
   const fetchWorkouts = async () => {
@@ -68,26 +76,35 @@ export default function AddSchedulePage() {
     }
   };
 
-  // Helper function to check if workout is cardio/duration-based
+  // Toggle Rest Day Logic
+  const toggleRestDay = (day) => {
+    setRestDays(prev => {
+      const isResting = !prev[day];
+      
+      // If turning ON rest day, clear workouts for that day
+      if (isResting) {
+        setSchedule(prevSched => ({
+          ...prevSched,
+          [day]: [] // Clear workouts
+        }));
+      }
+      
+      return { ...prev, [day]: isResting };
+    });
+  };
+
   const isCardioWorkout = (workout) => {
-    // Check workout type first (more reliable)
     const workoutType = workout.workout_type?.workout_type?.toLowerCase();
-    if (workoutType === 'cardio' || workoutType === 'duration') {
-      return true;
-    }
-    
-    // Fallback: check if it has duration and no sets/reps
-    // This helps identify cardio workouts even if type isn't explicitly set
-    if (workout.duration >= 0 && workout.sets === 0 && workout.reps === 0) {
-      return true;
-    }
-    
+    if (workoutType === 'cardio' || workoutType === 'duration') return true;
+    if (workout.duration >= 0 && workout.sets === 0 && workout.reps === 0) return true;
     return false;
   };
 
+  // --- Drag and Drop Handlers ---
+
   const handleDragStart = (e, workout) => {
     setDraggedWorkout(workout);
-    setDraggedFromDay(null); // This is a new workout from the sidebar
+    setDraggedFromDay(null);
     e.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -105,25 +122,21 @@ export default function AddSchedulePage() {
 
   const handleDrop = (e, day) => {
     e.preventDefault();
+    
+    // Block drop if it's a rest day
+    if (restDays[day]) return;
+
     if (draggedWorkout) {
       if (draggedFromDay) {
-        // Moving workout within schedule or between days
-        if (draggedFromDay === day) {
-          // Same day - just reordering (will be handled by handleDropOnWorkout)
-          return;
-        }
+        if (draggedFromDay === day) return;
         
-        // Different day - move workout
         const workoutToMove = { ...draggedWorkout };
-        
-        // Remove from original day
         setSchedule(prev => ({
           ...prev,
           [draggedFromDay]: prev[draggedFromDay].filter(w => w.id !== draggedWorkout.id),
           [day]: [...(prev[day] || []), workoutToMove]
         }));
       } else {
-        // Adding new workout from sidebar
         const newWorkout = {
           id: Date.now(),
           workout_id: draggedWorkout.id,
@@ -151,8 +164,10 @@ export default function AddSchedulePage() {
     e.preventDefault();
     e.stopPropagation();
     
+    // Block drop if it's a rest day
+    if (restDays[day]) return;
+
     if (draggedWorkout && draggedFromDay === day && draggedIndex !== null) {
-      // Reordering within the same day
       const dayWorkouts = [...schedule[day]];
       const [movedWorkout] = dayWorkouts.splice(draggedIndex, 1);
       dayWorkouts.splice(targetIndex, 0, movedWorkout);
@@ -180,20 +195,9 @@ export default function AddSchedulePage() {
       ...prev,
       [day]: prev[day].map(w => {
         if (w.id === workoutId) {
-          // Handle empty string or invalid input
-          if (value === '' || value === null || value === undefined) {
-            return { ...w, [field]: 0 };
-          }
-          
-          // Parse the value and ensure it's a valid number
+          if (value === '' || value === null) return { ...w, [field]: 0 };
           const numValue = parseInt(value, 10);
-          
-          // If parsing fails or results in NaN, default to 0
-          if (isNaN(numValue)) {
-            return { ...w, [field]: 0 };
-          }
-          
-          // Return the parsed number (which naturally removes leading zeros)
+          if (isNaN(numValue)) return { ...w, [field]: 0 };
           return { ...w, [field]: numValue };
         }
         return w;
@@ -204,23 +208,27 @@ export default function AddSchedulePage() {
   const resetSchedule = () => {
     if (window.confirm('Are you sure you want to reset the entire schedule?')) {
       const emptySchedule = {};
+      const emptyRestDays = {};
       DAYS.forEach(day => {
         emptySchedule[day] = [];
+        emptyRestDays[day] = false;
       });
       setSchedule(emptySchedule);
+      setRestDays(emptyRestDays);
     }
   };
 
   const validateForm = () => {
     const newErrors = {};
+    if (!formData.name) newErrors.name = 'Schedule name is required';
     
-    if (!formData.name) {
-      newErrors.name = 'Schedule name is required';
-    }
-    
+    // Calculate total workouts ignoring rest days
     const totalWorkouts = Object.values(schedule).reduce((sum, day) => sum + (day?.length || 0), 0);
+    
+    // It's valid to have a schedule with just rest days? Probably not helpful, but technically allowed. 
+    // Usually we want at least 1 workout in the whole week.
     if (totalWorkouts === 0) {
-      newErrors.workouts = 'Add at least one workout to the schedule';
+      newErrors.workouts = 'Add at least one workout to the schedule (non-rest days)';
     }
     
     setErrors(newErrors);
@@ -247,11 +255,15 @@ export default function AddSchedulePage() {
       const createdSchedule = await supabaseApi.createSchedule(scheduleData);
       const scheduleId = createdSchedule[0].id;
       
-      // Add workouts to schedule with order/arrangement numbers
+      // Add workouts to schedule
       for (const day of DAYS) {
+        // If it's a rest day, we simply skip adding workouts for this day.
+        // The DB doesn't have an is_rest_day column for the master schedule details,
+        // so "Rest Day" effectively means "No Data" for that day.
+        if (restDays[day]) continue; 
+
         const dayWorkouts = schedule[day] || [];
         
-        // Loop through each workout and save with its position (order_index)
         for (let i = 0; i < dayWorkouts.length; i++) {
           const workout = dayWorkouts[i];
           
@@ -259,7 +271,7 @@ export default function AddSchedulePage() {
             schedule_id: scheduleId,
             workout_id: workout.workout_id,
             day: day,
-            order_index: i + 1, // Order starts from 1 (1st workout, 2nd workout, etc.)
+            order_index: i + 1,
             set_no: workout.sets.toString(),
             rep_no: workout.reps.toString(),
             duration_minutes: workout.duration.toString(),
@@ -321,7 +333,7 @@ export default function AddSchedulePage() {
                   </div>
                   <div className="flex-1">
                     <h1 className="text-3xl font-bold text-gray-900">Create Workout Schedule</h1>
-                    <p className="text-gray-600 mt-1">Drag and drop workouts to build your weekly schedule</p>
+                    <p className="text-gray-600 mt-1">Drag and drop workouts or set days as "Rest" days</p>
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-500">Total Workouts</div>
@@ -456,132 +468,174 @@ export default function AddSchedulePage() {
 
                   <div className="grid grid-cols-1 gap-4">
                     {DAYS.map(day => (
-                      <div key={day} className="border-2 border-gray-200 rounded-xl overflow-hidden">
+                      <div 
+                        key={day} 
+                        className={`border-2 rounded-xl overflow-hidden transition-all ${
+                          restDays[day] ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                        }`}
+                      >
                         {/* Day Header */}
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3">
-                          <div className="flex items-center justify-between">
+                        <div className={`px-4 py-3 flex items-center justify-between ${
+                          restDays[day] 
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                            : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                        }`}>
+                          <div className="flex items-center space-x-3">
                             <h3 className="font-bold text-white text-lg">{day}</h3>
-                            <span className="bg-white bg-opacity-20 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                              {schedule[day]?.length || 0} workouts
-                            </span>
+                            {restDays[day] && (
+                              <span className="bg-white bg-opacity-20 text-white px-2 py-0.5 rounded text-xs font-semibold flex items-center">
+                                <Coffee size={12} className="mr-1" /> Rest Day
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center space-x-3">
+                            {!restDays[day] && (
+                              <span className="bg-white bg-opacity-20 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                {schedule[day]?.length || 0} workouts
+                              </span>
+                            )}
+                            
+                            {/* Rest Day Toggle */}
+                            <label className="flex items-center cursor-pointer bg-black bg-opacity-20 rounded-lg px-2 py-1 hover:bg-opacity-30 transition-all">
+                              <input 
+                                type="checkbox" 
+                                className="hidden"
+                                checked={restDays[day] || false}
+                                onChange={() => toggleRestDay(day)}
+                              />
+                              <div className={`w-4 h-4 rounded-full border-2 border-white mr-2 flex items-center justify-center ${
+                                restDays[day] ? 'bg-white' : 'bg-transparent'
+                              }`}>
+                                {restDays[day] && <CheckCircle size={10} className="text-green-600" />}
+                              </div>
+                              <span className="text-white text-xs font-medium">Rest Day</span>
+                            </label>
                           </div>
                         </div>
 
-                        {/* Drop Zone */}
-                        <div
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, day)}
-                          className={`p-4 min-h-[120px] ${
-                            schedule[day]?.length === 0
-                              ? 'bg-gray-50 border-2 border-dashed border-gray-300'
-                              : 'bg-white'
-                          }`}
-                        >
-                          {schedule[day]?.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-8">
-                              <Plus size={32} className="mb-2" />
-                              <p className="text-sm font-medium">Drag workouts here</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {(schedule[day] || []).map((workout, index) => (
-                                <div
-                                  key={workout.id}
-                                  draggable
-                                  onDragStart={(e) => handleScheduleDragStart(e, workout, day, index)}
-                                  onDragOver={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                  }}
-                                  onDrop={(e) => handleDropOnWorkout(e, day, index)}
-                                  className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-all group cursor-move"
-                                >
-                                  {/* Drag Handle */}
-                                  <div className="flex-shrink-0 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
-                                    <GripVertical size={20} />
-                                  </div>
-                                  
-                                  {/* Order Number Badge */}
-                                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                                    {index + 1}
-                                  </div>
-                                  
-                                  {workout.image_url ? (
-                                    <img
-                                      src={workout.image_url}
-                                      alt={workout.workout_name}
-                                      className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
-                                      <Dumbbell size={24} className="text-purple-600" />
+                        {/* Drop Zone or Rest Message */}
+                        {restDays[day] ? (
+                          <div className="p-6 flex flex-col items-center justify-center text-green-700 min-h-[120px]">
+                            <Coffee size={32} className="mb-2 opacity-50" />
+                            <p className="font-semibold">Recovery Day</p>
+                            <p className="text-xs opacity-75">No workouts scheduled</p>
+                          </div>
+                        ) : (
+                          <div
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, day)}
+                            className={`p-4 min-h-[120px] ${
+                              schedule[day]?.length === 0
+                                ? 'bg-gray-50 border-2 border-dashed border-gray-300'
+                                : 'bg-white'
+                            }`}
+                          >
+                            {schedule[day]?.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+                                <Plus size={32} className="mb-2" />
+                                <p className="text-sm font-medium">Drag workouts here</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {(schedule[day] || []).map((workout, index) => (
+                                  <div
+                                    key={workout.id}
+                                    draggable
+                                    onDragStart={(e) => handleScheduleDragStart(e, workout, day, index)}
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                    onDrop={(e) => handleDropOnWorkout(e, day, index)}
+                                    className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-all group cursor-move"
+                                  >
+                                    {/* Drag Handle */}
+                                    <div className="flex-shrink-0 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
+                                      <GripVertical size={20} />
                                     </div>
-                                  )}
-                                  
-                                  <div className="flex-1">
-                                    <p className="font-semibold text-gray-900">{workout.workout_name}</p>
                                     
-                                    {/* Conditional inputs based on workout type */}
-                                    {isCardioWorkout(workout) ? (
-                                      // Duration input for cardio
-                                      <div className="flex items-center space-x-2 mt-2">
-                                        <Clock size={16} className="text-green-600" />
-                                        <label className="text-xs text-gray-600 font-medium">Duration:</label>
-                                        <input
-                                          type="number"
-                                          value={workout.duration || ''}
-                                          onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
-                                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                                          min="0"
-                                          placeholder="0"
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                        <span className="text-xs text-gray-600">min</span>
-                                      </div>
+                                    {/* Order Number Badge */}
+                                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                                      {index + 1}
+                                    </div>
+                                    
+                                    {workout.image_url ? (
+                                      <img
+                                        src={workout.image_url}
+                                        alt={workout.workout_name}
+                                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                                      />
                                     ) : (
-                                      // Sets and Reps inputs for strength training
-                                      <div className="flex items-center space-x-3 mt-2">
-                                        <div className="flex items-center space-x-2">
-                                          <label className="text-xs text-gray-600 font-medium">Sets:</label>
-                                          <input
-                                            type="number"
-                                            value={workout.sets || ''}
-                                            onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
-                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="0"
-                                            placeholder="0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
-                                        
-                                        <div className="flex items-center space-x-2">
-                                          <label className="text-xs text-gray-600 font-medium">Reps:</label>
-                                          <input
-                                            type="number"
-                                            value={workout.reps || ''}
-                                            onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
-                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="0"
-                                            placeholder="0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
+                                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
+                                        <Dumbbell size={24} className="text-purple-600" />
                                       </div>
                                     )}
-                                  </div>
+                                    
+                                    <div className="flex-1">
+                                      <p className="font-semibold text-gray-900">{workout.workout_name}</p>
+                                      
+                                      {/* Conditional inputs based on workout type */}
+                                      {isCardioWorkout(workout) ? (
+                                        // Duration input for cardio
+                                        <div className="flex items-center space-x-2 mt-2">
+                                          <Clock size={16} className="text-green-600" />
+                                          <label className="text-xs text-gray-600 font-medium">Duration:</label>
+                                          <input
+                                            type="number"
+                                            value={workout.duration || ''}
+                                            onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
+                                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            min="0"
+                                            placeholder="0"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                          <span className="text-xs text-gray-600">min</span>
+                                        </div>
+                                      ) : (
+                                        // Sets and Reps inputs for strength training
+                                        <div className="flex items-center space-x-3 mt-2">
+                                          <div className="flex items-center space-x-2">
+                                            <label className="text-xs text-gray-600 font-medium">Sets:</label>
+                                            <input
+                                              type="number"
+                                              value={workout.sets || ''}
+                                              onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
+                                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              min="0"
+                                              placeholder="0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <label className="text-xs text-gray-600 font-medium">Reps:</label>
+                                            <input
+                                              type="number"
+                                              value={workout.reps || ''}
+                                              onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
+                                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              min="0"
+                                              placeholder="0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => removeWorkout(day, workout.id)}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeWorkout(day, workout.id)}
+                                      className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -613,11 +667,10 @@ export default function AddSchedulePage() {
                 <span className="font-semibold">💡 Tips:</span>
               </p>
               <ul className="mt-2 space-y-1 text-sm text-blue-700">
-                <li>• Drag workouts from the left sidebar and drop them onto any day</li>
-                <li>• Drag workouts within a day to reorder them - the order number will update automatically</li>
-                <li>• Drag workouts between days to move them</li>
-                <li>• Customize sets/reps for strength training or duration for cardio workouts</li>
-                <li>• Remove workouts by clicking the trash icon that appears on hover</li>
+                <li>• Toggle <strong>"Rest Day"</strong> to block workouts for that specific day.</li>
+                <li>• Drag workouts from the left sidebar and drop them onto any active day.</li>
+                <li>• Drag workouts within a day to reorder them.</li>
+                <li>• Remove workouts by clicking the trash icon that appears on hover.</li>
               </ul>
             </div>
           </div>
