@@ -6,7 +6,7 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { Save, ArrowLeft, X, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Target, AlertCircle } from 'lucide-react';
+import { Save, ArrowLeft, X, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Target, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -68,6 +68,11 @@ export default function AddSchedulePage() {
     }
   };
 
+  // Helper function to check if workout is cardio/duration-based
+  const isCardioWorkout = (workout) => {
+    return workout.duration > 0 || workout.workout_type?.workout_type?.toLowerCase() === 'cardio';
+  };
+
   const handleDragStart = (e, workout) => {
     setDraggedWorkout(workout);
     setDraggedFromDay(null); // This is a new workout from the sidebar
@@ -111,8 +116,10 @@ export default function AddSchedulePage() {
           id: Date.now(),
           workout_id: draggedWorkout.id,
           workout_name: draggedWorkout.name,
-          sets: draggedWorkout.sets,
-          reps: draggedWorkout.reps,
+          sets: draggedWorkout.sets || 0,
+          reps: draggedWorkout.reps || 0,
+          duration: draggedWorkout.duration || 0,
+          workout_type: draggedWorkout.workout_type,
           image_url: draggedWorkout.image_url,
         };
         
@@ -226,6 +233,7 @@ export default function AddSchedulePage() {
             order_index: i + 1, // Order starts from 1 (1st workout, 2nd workout, etc.)
             set_no: workout.sets.toString(),
             rep_no: workout.reps.toString(),
+            duration_minutes: workout.duration.toString(),
             is_deleted: false,
           });
         }
@@ -383,7 +391,10 @@ export default function AddSchedulePage() {
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-gray-900 truncate">{workout.name}</p>
                             <p className="text-sm text-gray-600">
-                              {workout.sets} sets × {workout.reps} reps
+                              {isCardioWorkout(workout) 
+                                ? `${workout.duration} min` 
+                                : `${workout.sets} sets × ${workout.reps} reps`
+                              }
                             </p>
                           </div>
                         </div>
@@ -481,31 +492,50 @@ export default function AddSchedulePage() {
                                   <div className="flex-1">
                                     <p className="font-semibold text-gray-900">{workout.workout_name}</p>
                                     
-                                    <div className="flex items-center space-x-3 mt-2">
-                                      <div className="flex items-center space-x-2">
-                                        <label className="text-xs text-gray-600 font-medium">Sets:</label>
+                                    {/* Conditional inputs based on workout type */}
+                                    {isCardioWorkout(workout) ? (
+                                      // Duration input for cardio
+                                      <div className="flex items-center space-x-2 mt-2">
+                                        <Clock size={16} className="text-green-600" />
+                                        <label className="text-xs text-gray-600 font-medium">Duration:</label>
                                         <input
                                           type="number"
-                                          value={workout.sets}
-                                          onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
-                                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                          value={workout.duration}
+                                          onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
+                                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                                           min="1"
                                           onClick={(e) => e.stopPropagation()}
                                         />
+                                        <span className="text-xs text-gray-600">min</span>
                                       </div>
-                                      
-                                      <div className="flex items-center space-x-2">
-                                        <label className="text-xs text-gray-600 font-medium">Reps:</label>
-                                        <input
-                                          type="number"
-                                          value={workout.reps}
-                                          onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
-                                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                          min="1"
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
+                                    ) : (
+                                      // Sets and Reps inputs for strength training
+                                      <div className="flex items-center space-x-3 mt-2">
+                                        <div className="flex items-center space-x-2">
+                                          <label className="text-xs text-gray-600 font-medium">Sets:</label>
+                                          <input
+                                            type="number"
+                                            value={workout.sets}
+                                            onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
+                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            min="1"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </div>
+                                        
+                                        <div className="flex items-center space-x-2">
+                                          <label className="text-xs text-gray-600 font-medium">Reps:</label>
+                                          <input
+                                            type="number"
+                                            value={workout.reps}
+                                            onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
+                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            min="1"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
 
                                   <button
@@ -554,7 +584,7 @@ export default function AddSchedulePage() {
                 <li>• Drag workouts from the left sidebar and drop them onto any day</li>
                 <li>• Drag workouts within a day to reorder them - the order number will update automatically</li>
                 <li>• Drag workouts between days to move them</li>
-                <li>• Customize sets and reps for each workout</li>
+                <li>• Customize sets/reps for strength training or duration for cardio workouts</li>
                 <li>• Remove workouts by clicking the trash icon that appears on hover</li>
               </ul>
             </div>
