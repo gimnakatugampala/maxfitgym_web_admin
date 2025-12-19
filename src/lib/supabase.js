@@ -838,10 +838,12 @@ async updateWorkout(id, updates) {
   },
   // Add these methods to your supabaseApi object in src/lib/supabase.js
 
-// Member Workout Assignment endpoints
+// Add these corrected methods to your supabaseApi object in src/lib/supabase.js
+
+// Member Workout Schedule Assignment endpoints (corrected table name)
 async getMemberAssignments(memberId) {
   return this.request(
-    `/member_workout_assignments?member_id=eq.${memberId}&select=*,work_schedule(id,name,description),members(id,first_name,last_name,membership_id)&order=assigned_date.desc`
+    `/member_workout_schedule?member_id=eq.${memberId}&select=*,work_schedule(id,name,description),members(id,first_name,last_name,membership_id)&is_active=eq.true&order=start_date.desc`
   );
 },
 
@@ -852,16 +854,23 @@ async getActiveMembers() {
 },
 
 async assignScheduleToMember(data) {
-  return this.request('/member_workout_assignments', {
+  return this.request('/member_workout_schedule', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      member_id: data.member_id,
+      schedule_id: data.schedule_id,
+      start_date: data.start_date,
+      end_date: data.end_date || null,
+      is_active: true,
+      worked_out_time_mins: null, // Optional field
+    }),
   });
 },
 
 async updateMemberAssignment(id, data) {
   try {
     const response = await this.request(
-      `/member_workout_assignments?id=eq.${id}&select=*`
+      `/member_workout_schedule?id=eq.${id}&select=*`
     );
     const current = response?.[0];
     
@@ -871,7 +880,11 @@ async updateMemberAssignment(id, data) {
     
     const payload = { ...current, ...data };
     
-    const result = await this.request(`/member_workout_assignments?id=eq.${id}`, {
+    // Clean up joined data
+    delete payload.work_schedule;
+    delete payload.members;
+    
+    const result = await this.request(`/member_workout_schedule?id=eq.${id}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
@@ -887,9 +900,56 @@ async deleteAssignment(id) {
   return this.updateMemberAssignment(id, { is_active: false });
 },
 
+// Replace the existing getAllAssignments method with this:
 async getAllAssignments() {
+  // Use the FK name to specify which relationship to use: schedule_id
   return this.request(
-    '/member_workout_assignments?select=*,work_schedule(id,name,description),members(id,first_name,last_name,membership_id)&is_active=eq.true&order=assigned_date.desc'
+    '/member_workout_schedule?select=*,schedule:work_schedule!schedule_id(id,name,description),members(id,first_name,last_name,membership_id)&is_active=eq.true&order=start_date.desc'
   );
+},
+
+// Replace the existing getMemberAssignments method with this:
+async getMemberAssignments(memberId) {
+  return this.request(
+    `/member_workout_schedule?member_id=eq.${memberId}&select=*,schedule:work_schedule!schedule_id(id,name,description),members(id,first_name,last_name,membership_id)&is_active=eq.true&order=start_date.desc`
+  );
+},
+// Add these methods to your supabaseApi object in src/lib/supabase.js
+
+// Get detailed schedule information with workouts
+async getScheduleDetails(scheduleId) {
+  return this.request(
+    `/work_schedule_detail?schedule_id=eq.${scheduleId}&select=*,workout:workouts(id,name,description)&order=day.asc,order_index.asc`
+  );
+},
+
+// Create member-specific schedule detail (customized workout)
+async createMemberScheduleDetail(data) {
+  return this.request('/member_schedule_detail', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+},
+
+// Get member's customized schedule details
+async getMemberScheduleDetails(memberScheduleId) {
+  return this.request(
+    `/member_schedule_detail?member_schedule_id=eq.${memberScheduleId}&select=*,schedule_detail:work_schedule_detail(id,day,workout:workouts(id,name))&order=order_index.asc`
+  );
+},
+
+// Update member schedule detail
+async updateMemberScheduleDetail(id, data) {
+  return this.request(`/member_schedule_detail?id=eq.${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+},
+
+// Delete member schedule detail
+async deleteMemberScheduleDetail(id) {
+  return this.request(`/member_schedule_detail?id=eq.${id}`, {
+    method: 'DELETE',
+  });
 },
 };
