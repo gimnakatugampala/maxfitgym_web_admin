@@ -7,13 +7,13 @@ import { supabaseApi } from '@/lib/supabase';
 export default function Home() {
   const router = useRouter();
 
-  // useEffect(() => {
-  //   if (supabaseApi.isAuthenticated()) {
-  //     router.push('/dashboard');
-  //   } else {
-  //     router.push('/login');
-  //   }
-  // }, [router]);
+  useEffect(() => {
+    if (supabaseApi.isAuthenticated()) {
+      router.push('/dashboard');
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
 
   return (
     <div className="flex items-center justify-center h-screen bg-gray-100">
