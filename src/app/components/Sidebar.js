@@ -4,33 +4,91 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
+  LayoutDashboard, 
   Users, 
   Dumbbell, 
   Calendar, 
-  BarChart3, 
-  Plus, 
+  Settings,
+  ChevronDown,
+  ChevronRight,
+  Menu, // Added Menu icon for the toggle
   X,
-  Menu 
+  Trophy,
+  UserPlus,
+  List,
+  Clock,
+  LogOut
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
   const pathname = usePathname();
+  const [isMinimized, setIsMinimized] = useState(false);
+  
+  const [expandedMenus, setExpandedMenus] = useState({
+    admin: true,
+    workout: false,
+    schedule: false,
+    members: true,
+    levels: false,
+  });
 
-  const menuItems = [
-    { id: 'dashboard', href: '/dashboard', icon: BarChart3, label: 'Dashboard' },
-    { id: 'admin-list', href: '/admin', icon: Users, label: 'Admin List', parent: 'admin' },
-    { id: 'add-admin', href: '/admin/add', icon: Plus, label: 'Add Admin', parent: 'admin' },
-    { id: 'workout-list', href: '/workouts', icon: Dumbbell, label: 'Workout List', parent: 'workout' },
-    { id: 'add-workout', href: '/workouts/add', icon: Plus, label: 'Add Workout', parent: 'workout' },
-    { id: 'schedule-list', href: '/schedules', icon: Calendar, label: 'Schedules', parent: 'schedule' },
-    { id: 'add-schedule', href: '/schedules/add', icon: Plus, label: 'Add Schedule', parent: 'schedule' },
-    { id: 'members', href: '/members', icon: Users, label: 'Members' },
-    { id: 'pending-members', href: '/members/pending', icon: Users, label: 'Pending Members', parent: 'members' },
-    { id: 'attendance', href: '/members/attendance', icon: Calendar, label: 'Attendance', parent: 'members' },
+  const toggleMenu = (menuId) => {
+    if (isMinimized) setIsMinimized(false);
+    setExpandedMenus(prev => ({
+      ...prev,
+      [menuId]: !prev[menuId]
+    }));
+  };
+
+  const menuStructure = [
+    { 
+      id: 'dashboard', 
+      label: 'Dashboard', 
+      href: '/dashboard', 
+      icon: LayoutDashboard 
+    },
+    {
+      id: 'admin',
+      label: 'Admin Management',
+      icon: Settings,
+      subItems: [
+        { label: 'Admin List', href: '/admin', icon: List },
+        { label: 'Add Admin', href: '/admin/add', icon: UserPlus },
+      ]
+    },
+    {
+      id: 'members',
+      label: 'Members',
+      icon: Users,
+      subItems: [
+        { label: 'All Members', href: '/members', icon: List },
+        { label: 'Pending Approvals', href: '/members/pending', icon: UserPlus },
+        { label: 'Attendance', href: '/members/attendance', icon: Clock },
+      ]
+    },
+    {
+      id: 'workout',
+      label: 'Workouts',
+      icon: Dumbbell,
+      subItems: [
+        { label: 'Workout List', href: '/workouts', icon: List },
+        { label: 'Add Workout', href: '/workouts/add', icon: UserPlus },
+      ]
+    },
+    {
+      id: 'schedule',
+      label: 'Schedules',
+      icon: Calendar,
+      subItems: [
+        { label: 'Schedule List', href: '/schedules', icon: List },
+        { label: 'Add Schedule', href: '/schedules/add', icon: UserPlus },
+      ]
+    }
   ];
 
   return (
     <>
+      {/* Mobile Overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
@@ -38,44 +96,117 @@ export default function Sidebar({ isOpen, onClose }) {
         />
       )}
 
+      {/* Sidebar Container */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-30
-        w-64 bg-gray-900 text-white
-        transform transition-transform duration-200 ease-in-out
+        bg-gray-900 text-white
+        transition-all duration-300 ease-in-out
+        flex flex-col
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+        ${isMinimized ? 'lg:w-20' : 'lg:w-72'}
+        w-64
       `}>
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
-          <div className="flex items-center space-x-2">
-            <Dumbbell className="w-8 h-8 text-blue-500" />
-            <span className="font-bold text-lg">Maxfit VIP</span>
+        
+        {/* Header with Minimize Button in front of Logo */}
+        <div className={`flex items-center h-16 border-b border-gray-800 ${isMinimized ? 'justify-center' : 'px-4'}`}>
+          
+          {/* Desktop Toggle Button */}
+          <button
+            onClick={() => setIsMinimized(!isMinimized)}
+            className="hidden lg:flex p-1 mr-3 rounded-md text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="flex items-center space-x-3 overflow-hidden">
+            <div className="bg-blue-600 p-2 rounded-lg shrink-0">
+              <Dumbbell className="w-5 h-5 text-white" />
+            </div>
+            {!isMinimized && (
+              <span className="font-bold text-lg whitespace-nowrap transition-opacity duration-300">
+                Maxfit VIP
+              </span>
+            )}
           </div>
-          <button onClick={onClose} className="lg:hidden">
+
+          {/* Mobile Close Button (Far Right) */}
+          <button onClick={onClose} className="lg:hidden ml-auto text-gray-400 hover:text-white">
             <X size={24} />
           </button>
         </div>
 
-        <nav className="p-4 space-y-2 overflow-y-auto h-[calc(100vh-73px)]">
-          {menuItems.map((item) => {
+        {/* Scrollable Navigation */}
+        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-hide">
+          {menuStructure.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const hasSubItems = item.subItems && item.subItems.length > 0;
+            const isExpanded = expandedMenus[item.id];
+            const isActiveParent = hasSubItems && item.subItems.some(sub => pathname === sub.href);
+            const isExactActive = pathname === item.href;
+
             return (
-              <Link
-                key={item.id}
-                href={item.href}
-                onClick={onClose}
-                className={`
-                  w-full flex items-center space-x-3 px-4 py-3 rounded-lg
-                  transition-colors duration-200
-                  ${isActive 
-                    ? 'bg-blue-600 text-white' 
-                    : 'text-gray-300 hover:bg-gray-800'
-                  }
-                  ${item.parent ? 'pl-8' : ''}
-                `}
-              >
-                <Icon size={20} />
-                <span>{item.label}</span>
-              </Link>
+              <div key={item.id} className="mb-2">
+                {!hasSubItems ? (
+                  <Link
+                    href={item.href}
+                    onClick={() => { onClose(); }}
+                    title={isMinimized ? item.label : ''}
+                    className={`
+                      flex items-center rounded-lg px-3 py-3 transition-colors duration-200
+                      ${isExactActive ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}
+                      ${isMinimized ? 'justify-center' : ''}
+                    `}
+                  >
+                    <Icon size={20} className="shrink-0" />
+                    {!isMinimized && <span className="ml-3 font-medium">{item.label}</span>}
+                  </Link>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => toggleMenu(item.id)}
+                      title={isMinimized ? item.label : ''}
+                      className={`
+                        w-full flex items-center justify-between rounded-lg px-3 py-3 transition-colors duration-200
+                        ${isActiveParent ? 'text-blue-400 bg-gray-800/50' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}
+                        ${isMinimized ? 'justify-center' : ''}
+                      `}
+                    >
+                      <div className="flex items-center">
+                        <Icon size={20} className="shrink-0" />
+                        {!isMinimized && <span className="ml-3 font-medium">{item.label}</span>}
+                      </div>
+                      {!isMinimized && (
+                        <div className="ml-auto">
+                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </div>
+                      )}
+                    </button>
+
+                    <div className={`
+                      overflow-hidden transition-all duration-300 ease-in-out
+                      ${(isExpanded && !isMinimized) ? 'max-h-96 opacity-100 mt-1' : 'max-h-0 opacity-0'}
+                    `}>
+                      {item.subItems.map((subItem) => {
+                         const isSubActive = pathname === subItem.href;
+                         return (
+                          <Link
+                            key={subItem.href}
+                            href={subItem.href}
+                            onClick={onClose}
+                            className={`
+                              flex items-center pl-10 pr-3 py-2 my-1 rounded-lg text-sm transition-colors
+                              ${isSubActive ? 'bg-gray-800 text-blue-400' : 'text-gray-500 hover:text-gray-300'}
+                            `}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-current mr-3 opacity-50"></span>
+                            <span>{subItem.label}</span>
+                          </Link>
+                         );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
             );
           })}
         </nav>
