@@ -916,16 +916,18 @@ async getMemberAssignments(memberId) {
 },
 // Add these methods to your supabaseApi object in src/lib/supabase.js
 
+// Replace these methods in your src/lib/supabase.js
+
 // Get detailed schedule information with workouts
 async getScheduleDetails(scheduleId) {
   return this.request(
-    `/work_schedule_detail?schedule_id=eq.${scheduleId}&select=*,workout:workouts(id,name,description)&order=day.asc,order_index.asc`
+    `/workout_schedule_details?schedule_id=eq.${scheduleId}&select=*,workout(id,name,description,sets,reps,duration,workout_type(workout_type))&is_deleted=eq.false&order=order_index.asc`
   );
 },
 
 // Create member-specific schedule detail (customized workout)
 async createMemberScheduleDetail(data) {
-  return this.request('/member_schedule_detail', {
+  return this.request('/member_workout_schedule_details', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -934,22 +936,41 @@ async createMemberScheduleDetail(data) {
 // Get member's customized schedule details
 async getMemberScheduleDetails(memberScheduleId) {
   return this.request(
-    `/member_schedule_detail?member_schedule_id=eq.${memberScheduleId}&select=*,schedule_detail:work_schedule_detail(id,day,workout:workouts(id,name))&order=order_index.asc`
+    `/member_workout_schedule_details?member_schedule_id=eq.${memberScheduleId}&select=*,schedule_detail:workout_schedule_details(id,day,workout(id,name))&order=order_index.asc`
   );
 },
 
-// Update member schedule detail
+// Update member schedule detail (using PUT to avoid CORS issues)
 async updateMemberScheduleDetail(id, data) {
-  return this.request(`/member_schedule_detail?id=eq.${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
+  try {
+    const response = await this.request(
+      `/member_workout_schedule_details?id=eq.${id}&select=*`
+    );
+    const current = response?.[0];
+    
+    if (!current) {
+      throw new Error('Member schedule detail not found');
+    }
+    
+    const payload = { ...current, ...data };
+    
+    // Clean up any joined data
+    delete payload.schedule_detail;
+    
+    const result = await this.request(`/member_workout_schedule_details?id=eq.${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating member schedule detail:', error);
+    throw error;
+  }
 },
 
-// Delete member schedule detail
+// Delete member schedule detail (soft delete)
 async deleteMemberScheduleDetail(id) {
-  return this.request(`/member_schedule_detail?id=eq.${id}`, {
-    method: 'DELETE',
-  });
+  return this.updateMemberScheduleDetail(id, { is_deleted: true });
 },
 };
