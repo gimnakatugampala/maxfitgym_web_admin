@@ -772,5 +772,14 @@ async updateWorkout(id, updates) {
       };
     }
   },
+
+  // Analytics: Get sessions for the last 24 hours
+  async getRecentSessions() {
+    const yesterday = new Date();
+    yesterday.setHours(yesterday.getHours() - 24);
+    
+    // Fetch sessions created after 24 hours ago
+    return this.request(`/members_sessions?date=gte.${yesterday.toISOString()}&select=date`);
+  },
   
 };

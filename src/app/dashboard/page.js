@@ -6,7 +6,8 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { Users, Dumbbell, Calendar, TrendingUp, UserCheck, UserX } from 'lucide-react';
+import { Users, Dumbbell, Calendar, TrendingUp, UserCheck, UserX, Activity } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -20,6 +21,7 @@ export default function DashboardPage() {
     totalSchedules: 0,
     todayAttendance: 0,
   });
+  const [chartData, setChartData] = useState([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -34,12 +36,47 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const dashboardStats = await supabaseApi.getDashboardStats();
+      const [dashboardStats, sessions] = await Promise.all([
+        supabaseApi.getDashboardStats(),
+        supabaseApi.getRecentSessions() // Fetch recent usage logs
+      ]);
+      
       setStats(dashboardStats);
+      processChartData(sessions || []);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     }
     setLoading(false);
+  };
+
+  const processChartData = (sessions) => {
+    // 1. Create buckets for the last 24 hours
+    const hours = {};
+    const now = new Date();
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(now);
+      d.setHours(d.getHours() - i);
+      const hourKey = d.toLocaleTimeString([], { hour: '2-digit', hour12: true }); // e.g., "10 AM"
+      hours[hourKey] = 0; // Initialize with 0
+    }
+
+    // 2. Fill buckets with data
+    sessions.forEach(session => {
+      if (!session.date) return;
+      const date = new Date(session.date);
+      const hourKey = date.toLocaleTimeString([], { hour: '2-digit', hour12: true });
+      if (hours[hourKey] !== undefined) {
+        hours[hourKey]++;
+      }
+    });
+
+    // 3. Convert to Array for Recharts
+    const data = Object.entries(hours).map(([time, count]) => ({
+      time,
+      users: count
+    }));
+
+    setChartData(data);
   };
 
   if (loading) {
@@ -118,7 +155,8 @@ export default function DashboardPage() {
             <p className="text-gray-600 mt-1">Welcome back, {user?.email}</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {statCards.map((card, index) => {
               const Icon = card.icon;
               return (
@@ -145,6 +183,68 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+
+          {/* Real-time Activity Chart */}
+          <div className="bg-white rounded-xl shadow-md p-6 mb-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                  <Activity className="mr-2 text-blue-600" />
+                  Real-time App Usage
+                </h2>
+                <p className="text-sm text-gray-500">Members using the app in the last 24 hours</p>
+              </div>
+              <div className="flex items-center space-x-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                <span className="font-medium">Live Updates</span>
+              </div>
+            </div>
+            
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart
+                  data={chartData}
+                  margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="time" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    interval={3} // Show every 3rd label to avoid crowding
+                  />
+                  <YAxis 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
+                    labelStyle={{ color: '#111827', fontWeight: 'bold' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="users" 
+                    stroke="#2563EB" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#colorUsers)" 
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Quick Actions */}
@@ -186,14 +286,6 @@ export default function DashboardPage() {
                 <h3 className="font-semibold text-gray-900">Pending Members</h3>
                 <p className="text-sm text-gray-600 mt-1">Review applications</p>
               </button>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="mt-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <p className="text-gray-500 text-center py-8">No recent activity to display</p>
             </div>
           </div>
         </main>
