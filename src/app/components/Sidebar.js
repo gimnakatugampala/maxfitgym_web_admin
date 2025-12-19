@@ -65,7 +65,7 @@ const menuStructure = [
     subItems: [
       { label: 'All Members', href: '/members', icon: List },
       { label: 'Pending Approvals', href: '/members/pending', icon: UserPlus },
-      { label: 'Attendance', href: '/members/attendance', icon: Clock },
+      // { label: 'Attendance', href: '/members/attendance', icon: Clock },
     ]
   },
   {
