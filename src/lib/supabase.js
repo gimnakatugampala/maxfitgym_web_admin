@@ -836,4 +836,60 @@ async updateWorkout(id, updates) {
     const result = await response.json();
     return result[0]; // Upsert returns an array, we return the first item
   },
+  // Add these methods to your supabaseApi object in src/lib/supabase.js
+
+// Member Workout Assignment endpoints
+async getMemberAssignments(memberId) {
+  return this.request(
+    `/member_workout_assignments?member_id=eq.${memberId}&select=*,work_schedule(id,name,description),members(id,first_name,last_name,membership_id)&order=assigned_date.desc`
+  );
+},
+
+async getActiveMembers() {
+  return this.request(
+    '/members?select=id,membership_id,first_name,last_name,phone_number&is_active=eq.true&is_deleted=eq.false&order=first_name.asc'
+  );
+},
+
+async assignScheduleToMember(data) {
+  return this.request('/member_workout_assignments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+},
+
+async updateMemberAssignment(id, data) {
+  try {
+    const response = await this.request(
+      `/member_workout_assignments?id=eq.${id}&select=*`
+    );
+    const current = response?.[0];
+    
+    if (!current) {
+      throw new Error('Assignment not found');
+    }
+    
+    const payload = { ...current, ...data };
+    
+    const result = await this.request(`/member_workout_assignments?id=eq.${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating assignment:', error);
+    throw error;
+  }
+},
+
+async deleteAssignment(id) {
+  return this.updateMemberAssignment(id, { is_active: false });
+},
+
+async getAllAssignments() {
+  return this.request(
+    '/member_workout_assignments?select=*,work_schedule(id,name,description),members(id,first_name,last_name,membership_id)&is_active=eq.true&order=assigned_date.desc'
+  );
+},
 };

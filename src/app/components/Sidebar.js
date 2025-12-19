@@ -5,19 +5,19 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
+  ClipboardList ,
   Users, 
   Dumbbell, 
   Calendar, 
   Settings,
   ChevronDown,
   ChevronRight,
-  Menu, // Added Menu icon for the toggle
+  Menu, 
   X,
   Trophy,
   UserPlus,
   List,
-  Clock,
-  LogOut
+  Clock
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -28,7 +28,7 @@ export default function Sidebar({ isOpen, onClose }) {
     admin: true,
     workout: false,
     schedule: false,
-    members: true,
+    members: true, // Keep members expanded by default
     levels: false,
   });
 
@@ -40,52 +40,54 @@ export default function Sidebar({ isOpen, onClose }) {
     }));
   };
 
-  const menuStructure = [
-    { 
-      id: 'dashboard', 
-      label: 'Dashboard', 
-      href: '/dashboard', 
-      icon: LayoutDashboard 
-    },
-    {
-      id: 'admin',
-      label: 'Admin Management',
-      icon: Settings,
-      subItems: [
-        { label: 'Admin List', href: '/admin', icon: List },
-        { label: 'Add Admin', href: '/admin/add', icon: UserPlus },
-      ]
-    },
-    {
-      id: 'members',
-      label: 'Members',
-      icon: Users,
-      subItems: [
-        { label: 'All Members', href: '/members', icon: List },
-        { label: 'Pending Approvals', href: '/members/pending', icon: UserPlus },
-        { label: 'Attendance', href: '/members/attendance', icon: Clock },
-      ]
-    },
-    {
-      id: 'workout',
-      label: 'Workouts',
-      icon: Dumbbell,
-      subItems: [
-        { label: 'Workout List', href: '/workouts', icon: List },
-        { label: 'Add Workout', href: '/workouts/add', icon: UserPlus },
-      ]
-    },
-    {
-      id: 'schedule',
-      label: 'Schedules',
-      icon: Calendar,
-      subItems: [
-        { label: 'Schedule List', href: '/schedules', icon: List },
-        { label: 'Add Schedule', href: '/schedules/add', icon: UserPlus },
-      ]
-    }
-  ];
+// In your Sidebar.js, update the menuStructure array to include:
 
+const menuStructure = [
+  { 
+    id: 'dashboard', 
+    label: 'Dashboard', 
+    href: '/dashboard', 
+    icon: LayoutDashboard 
+  },
+  {
+    id: 'admin',
+    label: 'Admin Management',
+    icon: Settings,
+    subItems: [
+      { label: 'Admin List', href: '/admin', icon: List },
+      { label: 'Add Admin', href: '/admin/add', icon: UserPlus },
+    ]
+  },
+  {
+    id: 'members',
+    label: 'Members',
+    icon: Users,
+    subItems: [
+      { label: 'All Members', href: '/members', icon: List },
+      { label: 'Pending Approvals', href: '/members/pending', icon: UserPlus },
+      { label: 'Attendance', href: '/members/attendance', icon: Clock },
+    ]
+  },
+  {
+    id: 'workout',
+    label: 'Workouts',
+    icon: Dumbbell,
+    subItems: [
+      { label: 'Workout List', href: '/workouts', icon: List },
+      { label: 'Add Workout', href: '/workouts/add', icon: UserPlus },
+    ]
+  },
+  {
+    id: 'schedule',
+    label: 'Schedules',
+    icon: Calendar,
+    subItems: [
+      { label: 'Schedule List', href: '/schedules', icon: List },
+      { label: 'Add Schedule', href: '/schedules/add', icon: UserPlus },
+      { label: 'Assign Schedule', href: '/schedules/assign', icon: ClipboardList }, // NEW ITEM
+    ]
+  }
+];
   return (
     <>
       {/* Mobile Overlay */}
@@ -107,7 +109,7 @@ export default function Sidebar({ isOpen, onClose }) {
         w-64
       `}>
         
-        {/* Header with Minimize Button in front of Logo */}
+        {/* Header */}
         <div className={`flex items-center h-16 border-b border-gray-800 ${isMinimized ? 'justify-center' : 'px-4'}`}>
           
           {/* Desktop Toggle Button */}
@@ -129,13 +131,13 @@ export default function Sidebar({ isOpen, onClose }) {
             )}
           </div>
 
-          {/* Mobile Close Button (Far Right) */}
+          {/* Mobile Close Button */}
           <button onClick={onClose} className="lg:hidden ml-auto text-gray-400 hover:text-white">
             <X size={24} />
           </button>
         </div>
 
-        {/* Scrollable Navigation */}
+        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 scrollbar-hide">
           {menuStructure.map((item) => {
             const Icon = item.icon;
@@ -190,7 +192,8 @@ export default function Sidebar({ isOpen, onClose }) {
                          const isSubActive = pathname === subItem.href;
                          return (
                           <Link
-                            key={subItem.href}
+                            // FIX: Use label as unique key instead of href
+                            key={subItem.label} 
                             href={subItem.href}
                             onClick={onClose}
                             className={`
