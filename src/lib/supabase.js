@@ -508,9 +508,10 @@ async updateWorkout(id, updates) {
     return data[0];
   },
 
-  async getScheduleDetails(scheduleId) {
-    return this.request(`/workout_schedule_details?schedule_id=eq.${scheduleId}&is_deleted=eq.false&select=*,workout(*),day(name)`);
-  },
+ async getScheduleDetails(scheduleId) {
+  // We removed 'day(name)' so it returns the 'day' string column directly (e.g. "Monday")
+  return this.request(`/workout_schedule_details?schedule_id=eq.${scheduleId}&is_deleted=eq.false&select=*,workout(*)`);
+},
 
   async createSchedule(data) {
     return this.request('/work_schedule', {
@@ -526,18 +527,85 @@ async updateWorkout(id, updates) {
     });
   },
 
-  async updateSchedule(id, data) {
-    return this.request(`/work_schedule?id=eq.${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
+// ------------------------------------------------------------------
+  // UPDATE SCHEDULE (Using PUT to bypass CORS PATCH issues)
+  // ------------------------------------------------------------------
+  async updateSchedule(id, updates) {
+    console.log('Updating schedule ID:', id);
+
+    try {
+      // 1. Fetch current schedule data
+      // We need the full object because PUT replaces the entire record
+      const response = await this.request(`/work_schedule?id=eq.${id}&select=*`);
+      const currentSchedule = response?.[0];
+
+      if (!currentSchedule) {
+        throw new Error('Schedule not found');
+      }
+
+      // 2. Prepare the full payload
+      // Merge existing data with your updates and update the timestamp
+      const payload = { 
+        ...currentSchedule, 
+        ...updates,
+        updated_at: new Date().toISOString() 
+      };
+
+      // 3. Send PUT request
+      // This overwrites the row, bypassing the blocked PATCH method
+      const result = await this.request(`/work_schedule?id=eq.${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('Error in updateSchedule:', error);
+      throw error;
+    }
   },
 
+// ------------------------------------------------------------------
+  // DELETE SCHEDULE DETAILS (Soft Delete via Loop + PUT)
+  // ------------------------------------------------------------------
   async deleteScheduleDetails(scheduleId) {
-    return this.request(`/workout_schedule_details?schedule_id=eq.${scheduleId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ is_deleted: true }),
-    });
+    console.log('Soft deleting details for schedule:', scheduleId);
+    
+    try {
+      // 1. Fetch all active details for this schedule
+      // We assume select=* to get all columns needed for the PUT replacement
+      const details = await this.request(`/workout_schedule_details?schedule_id=eq.${scheduleId}&is_deleted=eq.false&select=*`);
+
+      if (!details || details.length === 0) {
+        console.log('No details found to delete.');
+        return;
+      }
+
+      // 2. Loop through each item and soft delete it individually
+      // This bypasses the "PATCH not allowed" error
+      for (const detail of details) {
+        
+        // Prepare the updated object
+        const payload = { ...detail, is_deleted: true };
+
+        // Clean up any joined data if it exists (sanity check)
+        delete payload.workout; 
+        delete payload.day_join; // if you had joined day table
+
+        // Send PUT request to replace the row with the deleted version
+        await this.request(`/workout_schedule_details?id=eq.${detail.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload)
+        });
+      }
+      
+      console.log('Successfully soft deleted old schedule details.');
+
+    } catch (error) {
+      console.error('Error in deleteScheduleDetails:', error);
+      throw error;
+    }
   },
 
   // Member endpoints

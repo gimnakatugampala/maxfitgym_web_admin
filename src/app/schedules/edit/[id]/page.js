@@ -50,7 +50,7 @@ export default function EditSchedulePage() {
       return true;
     }
     // Fallback logic
-    if (workout.duration >= 0 && (!workout.sets || workout.sets === 0) && (!workout.reps || workout.reps === 0)) {
+    if ((workout.duration > 0 || workout.duration_minutes > 0) && (!workout.sets || workout.sets === 0)) {
       return true;
     }
     return false;
@@ -73,72 +73,65 @@ export default function EditSchedulePage() {
         });
       }
 
-      // Initialize empty schedule structure
+      // Initialize empty schedule buckets
       const initialSchedule = {};
       DAYS.forEach(day => {
         initialSchedule[day] = [];
       });
 
-      // Populate schedule with existing details
       if (detailsData && detailsData.length > 0) {
         // Sort by order_index to ensure correct visual order
         detailsData.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
         detailsData.forEach(detail => {
-          // --- ROBUST DAY MATCHING LOGIC ---
-          let dayName = null;
-
-          // 1. Try to get day from the joined object (if your query is select=*,day(name))
-          if (detail.day && typeof detail.day === 'object' && detail.day.name) {
-            dayName = detail.day.name;
-          } 
-          // 2. Try to get day from string column
-          else if (detail.day && typeof detail.day === 'string') {
-             dayName = detail.day;
-          }
-
-          // 3. Normalize dayName (Capitalize first letter) and check validity
           let targetDay = null;
-          if (dayName) {
-            const normalized = dayName.trim().charAt(0).toUpperCase() + dayName.trim().slice(1).toLowerCase();
-            if (DAYS.includes(normalized)) {
-              targetDay = normalized;
-            }
-          }
 
-          // 4. Fallback: Use day_id if day string failed
-          if (!targetDay && detail.day_id) {
-            const dayIndex = parseInt(detail.day_id) - 1; // Assuming 1=Monday
-            if (dayIndex >= 0 && dayIndex < DAYS.length) {
-              targetDay = DAYS[dayIndex];
-            }
+          // --- ROBUST DAY MATCHING LOGIC ---
+          
+          // Priority 1: Use day_id (1 = Monday, 7 = Sunday)
+          if (detail.day_id && detail.day_id >= 1 && detail.day_id <= 7) {
+             targetDay = DAYS[detail.day_id - 1]; 
           }
-
-          // If we successfully found which day bucket this belongs to:
-          if (targetDay) {
-            // Get workout info either from the JOIN or the ALL list
-            let originalWorkout = detail.workout; // Check if joined data exists
+          
+          // Priority 2: Use day name string (e.g. "Monday") if ID failed
+          if (!targetDay) {
+            let dayName = null;
+            if (typeof detail.day === 'string') dayName = detail.day;
+            else if (typeof detail.day === 'object' && detail.day?.name) dayName = detail.day.name;
             
-            if (!originalWorkout) {
-              // Fallback to searching the full list (using loose equality for string/int ids)
-              originalWorkout = workoutsData?.find(w => w.id == detail.workout_id);
+            if (dayName) {
+              // Normalize case (e.g. "monday" -> "Monday")
+              const normalized = dayName.trim().charAt(0).toUpperCase() + dayName.trim().slice(1).toLowerCase();
+              if (DAYS.includes(normalized)) targetDay = normalized;
+            }
+          }
+
+          // If we found a valid bucket, add the workout
+          if (targetDay && initialSchedule[targetDay]) {
+            
+            // Get workout info (Prefer joined object, fallback to list search)
+            let originalWorkout = detail.workout;
+            if (!originalWorkout && workoutsData) {
+              originalWorkout = workoutsData.find(w => w.id == detail.workout_id);
             }
 
-            // Push to schedule
-            initialSchedule[targetDay].push({
-              id: Date.now() + Math.random(), // Unique UI ID
+            // Create the UI object
+            const workoutUIObject = {
+              id: Date.now() + Math.random(), // Unique ID for Drag&Drop key
               workout_id: detail.workout_id,
               
-              // Visual Details
+              // Display Info
               workout_name: originalWorkout?.name || "Unknown Workout",
               workout_type: originalWorkout?.workout_type,
               image_url: originalWorkout?.image_url,
               
-              // Numeric Data (Prefer Detail record > Original Workout Default > 0)
+              // Values: Prefer Detail record > Original Default > 0
               sets: detail.set_no ? parseInt(detail.set_no) : (originalWorkout?.sets || 0),
               reps: detail.rep_no ? parseInt(detail.rep_no) : (originalWorkout?.reps || 0),
               duration: detail.duration_minutes ? parseInt(detail.duration_minutes) : (originalWorkout?.duration || 0),
-            });
+            };
+
+            initialSchedule[targetDay].push(workoutUIObject);
           }
         });
       }
