@@ -7,7 +7,7 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { Plus, Edit, Trash2, Search, Video, Dumbbell, Target, Calendar, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Video, Dumbbell, Target, Calendar, Clock,  Image as ImageIcon } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import toast from 'react-hot-toast';
 
@@ -334,19 +334,28 @@ const filteredWorkouts = workouts.filter(workout => {
                       {workout.description || 'No description available'}
                     </p>
                     
-                    {/* Stats */}
+                    {/* Stats - Conditional based on workout type */}
                     <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-1 text-purple-600">
-                          <Target size={16} />
-                          <span className="text-sm font-semibold">{workout.sets || 0} Sets</span>
+                      {workout.workout_type?.workout_type?.toLowerCase() === 'cardio' || workout.duration > 0 ? (
+                        // Duration-based workout (Cardio)
+                        <div className="flex items-center space-x-2 text-green-600">
+                          <Clock size={16} />
+                          <span className="text-sm font-semibold">{workout.duration || 0} min</span>
                         </div>
-                        <div className="w-px h-4 bg-gray-300" />
-                        <div className="flex items-center space-x-1 text-pink-600">
-                          <Dumbbell size={16} />
-                          <span className="text-sm font-semibold">{workout.reps || 0} Reps</span>
+                      ) : (
+                        // Sets-based workout (Strength Training)
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-1 text-purple-600">
+                            <Target size={16} />
+                            <span className="text-sm font-semibold">{workout.sets || 0} Sets</span>
+                          </div>
+                          <div className="w-px h-4 bg-gray-300" />
+                          <div className="flex items-center space-x-1 text-pink-600">
+                            <Dumbbell size={16} />
+                            <span className="text-sm font-semibold">{workout.reps || 0} Reps</span>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                     
                     {/* Date */}
