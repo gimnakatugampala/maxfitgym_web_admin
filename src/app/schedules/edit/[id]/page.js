@@ -6,7 +6,7 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../../components/LoadingSpinner';
-import { Save, ArrowLeft, X, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Clock, AlertCircle } from 'lucide-react';
+import { Save, ArrowLeft, X, Search, GripVertical, Plus, Trash2, Calendar, Dumbbell, Clock, AlertCircle, Coffee, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
@@ -23,6 +23,8 @@ export default function EditSchedulePage() {
     description: '',
   });
   const [schedule, setSchedule] = useState({});
+  const [restDays, setRestDays] = useState({}); // New State for Rest Days
+
   const [draggedWorkout, setDraggedWorkout] = useState(null);
   const [draggedFromDay, setDraggedFromDay] = useState(null);
   const [draggedIndex, setDraggedIndex] = useState(null);
@@ -44,16 +46,25 @@ export default function EditSchedulePage() {
   // Helper function to check if workout is cardio/duration-based
   const isCardioWorkout = (workout) => {
     if (!workout) return false;
-    // Check workout type first (more reliable)
     const workoutType = workout.workout_type?.workout_type?.toLowerCase();
-    if (workoutType === 'cardio' || workoutType === 'duration') {
-      return true;
-    }
-    // Fallback logic
-    if ((workout.duration > 0 || workout.duration_minutes > 0) && (!workout.sets || workout.sets === 0)) {
-      return true;
-    }
+    if (workoutType === 'cardio' || workoutType === 'duration') return true;
+    if ((workout.duration > 0 || workout.duration_minutes > 0) && (!workout.sets || workout.sets === 0)) return true;
     return false;
+  };
+
+  // Toggle Rest Day Logic
+  const toggleRestDay = (day) => {
+    setRestDays(prev => {
+      const isResting = !prev[day];
+      // If turning ON rest day, clear workouts for that day
+      if (isResting) {
+        setSchedule(prevSched => ({
+          ...prevSched,
+          [day]: [] 
+        }));
+      }
+      return { ...prev, [day]: isResting };
+    });
   };
 
   const fetchData = async () => {
@@ -73,70 +84,69 @@ export default function EditSchedulePage() {
         });
       }
 
-      // Initialize empty schedule buckets
+      // Initialize empty structure
       const initialSchedule = {};
+      const initialRestDays = {};
       DAYS.forEach(day => {
         initialSchedule[day] = [];
+        initialRestDays[day] = false;
       });
 
       if (detailsData && detailsData.length > 0) {
-        // Sort by order_index to ensure correct visual order
         detailsData.sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
 
         detailsData.forEach(detail => {
           let targetDay = null;
 
-          // --- ROBUST DAY MATCHING LOGIC ---
-          
-          // Priority 1: Use day_id (1 = Monday, 7 = Sunday)
+          // Robust Day Matching
           if (detail.day_id && detail.day_id >= 1 && detail.day_id <= 7) {
              targetDay = DAYS[detail.day_id - 1]; 
           }
-          
-          // Priority 2: Use day name string (e.g. "Monday") if ID failed
           if (!targetDay) {
             let dayName = null;
             if (typeof detail.day === 'string') dayName = detail.day;
             else if (typeof detail.day === 'object' && detail.day?.name) dayName = detail.day.name;
             
             if (dayName) {
-              // Normalize case (e.g. "monday" -> "Monday")
               const normalized = dayName.trim().charAt(0).toUpperCase() + dayName.trim().slice(1).toLowerCase();
               if (DAYS.includes(normalized)) targetDay = normalized;
             }
           }
 
-          // If we found a valid bucket, add the workout
-          if (targetDay && initialSchedule[targetDay]) {
-            
-            // Get workout info (Prefer joined object, fallback to list search)
-            let originalWorkout = detail.workout;
-            if (!originalWorkout && workoutsData) {
-              originalWorkout = workoutsData.find(w => w.id == detail.workout_id);
+          if (targetDay) {
+            // Check if this record marks a rest day
+            if (detail.is_rest_day) {
+              initialRestDays[targetDay] = true;
+            } 
+            // Otherwise, add the workout if it exists
+            else if (initialSchedule[targetDay]) {
+              
+              let originalWorkout = detail.workout;
+              if (!originalWorkout && workoutsData && detail.workout_id) {
+                originalWorkout = workoutsData.find(w => w.id == detail.workout_id);
+              }
+
+              // Only push if there's actually a workout ID attached (skip empty records)
+              if (detail.workout_id) {
+                const workoutUIObject = {
+                  id: Date.now() + Math.random(), 
+                  workout_id: detail.workout_id,
+                  workout_name: originalWorkout?.name || "Unknown Workout",
+                  workout_type: originalWorkout?.workout_type,
+                  image_url: originalWorkout?.image_url,
+                  sets: detail.set_no ? parseInt(detail.set_no) : (originalWorkout?.sets || 0),
+                  reps: detail.rep_no ? parseInt(detail.rep_no) : (originalWorkout?.reps || 0),
+                  duration: detail.duration_minutes ? parseInt(detail.duration_minutes) : (originalWorkout?.duration || 0),
+                };
+                initialSchedule[targetDay].push(workoutUIObject);
+              }
             }
-
-            // Create the UI object
-            const workoutUIObject = {
-              id: Date.now() + Math.random(), // Unique ID for Drag&Drop key
-              workout_id: detail.workout_id,
-              
-              // Display Info
-              workout_name: originalWorkout?.name || "Unknown Workout",
-              workout_type: originalWorkout?.workout_type,
-              image_url: originalWorkout?.image_url,
-              
-              // Values: Prefer Detail record > Original Default > 0
-              sets: detail.set_no ? parseInt(detail.set_no) : (originalWorkout?.sets || 0),
-              reps: detail.rep_no ? parseInt(detail.rep_no) : (originalWorkout?.reps || 0),
-              duration: detail.duration_minutes ? parseInt(detail.duration_minutes) : (originalWorkout?.duration || 0),
-            };
-
-            initialSchedule[targetDay].push(workoutUIObject);
           }
         });
       }
       
       setSchedule(initialSchedule);
+      setRestDays(initialRestDays);
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -175,9 +185,15 @@ export default function EditSchedulePage() {
 
   const handleDrop = (e, day) => {
     e.preventDefault();
+    
+    // Block drop if Rest Day
+    if (restDays[day]) {
+      toast.error(`Cannot add workouts to ${day} (Rest Day)`);
+      return;
+    }
+
     if (draggedWorkout) {
       if (draggedFromDay) {
-        // Moving existing
         if (draggedFromDay === day) return; 
         
         const workoutToMove = { ...draggedWorkout };
@@ -187,7 +203,6 @@ export default function EditSchedulePage() {
           [day]: [...(prev[day] || []), workoutToMove]
         }));
       } else {
-        // Adding new
         const newWorkout = {
           id: Date.now(),
           workout_id: draggedWorkout.id,
@@ -211,6 +226,8 @@ export default function EditSchedulePage() {
     e.preventDefault();
     e.stopPropagation();
     
+    if (restDays[day]) return;
+
     if (draggedWorkout && draggedFromDay === day && draggedIndex !== null) {
       const dayWorkouts = [...schedule[day]];
       const [movedWorkout] = dayWorkouts.splice(draggedIndex, 1);
@@ -252,8 +269,13 @@ export default function EditSchedulePage() {
   const resetSchedule = () => {
     if (window.confirm('Are you sure you want to clear the entire schedule?')) {
       const emptySchedule = {};
-      DAYS.forEach(day => emptySchedule[day] = []);
+      const emptyRestDays = {};
+      DAYS.forEach(day => {
+        emptySchedule[day] = [];
+        emptyRestDays[day] = false;
+      });
       setSchedule(emptySchedule);
+      setRestDays(emptyRestDays);
     }
   };
 
@@ -262,7 +284,11 @@ export default function EditSchedulePage() {
     if (!formData.name) newErrors.name = 'Schedule name is required';
     
     const totalWorkouts = Object.values(schedule).reduce((sum, day) => sum + (day?.length || 0), 0);
-    if (totalWorkouts === 0) newErrors.workouts = 'Add at least one workout to the schedule';
+    const totalRestDays = Object.values(restDays).filter(Boolean).length;
+
+    if (totalWorkouts === 0 && totalRestDays === 0) {
+      newErrors.workouts = 'Please add workouts or set rest days';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -290,9 +316,24 @@ export default function EditSchedulePage() {
 
       // 3. Insert new details
       for (const day of DAYS) {
-        const dayWorkouts = schedule[day] || [];
         const dayId = DAYS.indexOf(day) + 1; // 1=Monday
 
+        // Handle Rest Days
+        if (restDays[day]) {
+          await supabaseApi.createScheduleDetail({
+            schedule_id: params.id,
+            day: day,
+            day_id: dayId,
+            is_rest_day: true,
+            workout_id: null,
+            order_index: 1,
+            is_deleted: false,
+          });
+          continue; 
+        }
+
+        // Handle Workout Days
+        const dayWorkouts = schedule[day] || [];
         for (let i = 0; i < dayWorkouts.length; i++) {
           const workout = dayWorkouts[i];
           const isCardio = isCardioWorkout(workout);
@@ -306,6 +347,7 @@ export default function EditSchedulePage() {
             set_no: isCardio ? null : workout.sets.toString(),
             rep_no: isCardio ? null : workout.reps.toString(),
             duration_minutes: isCardio ? workout.duration.toString() : null,
+            is_rest_day: false,
             is_deleted: false,
           });
         }
@@ -489,110 +531,157 @@ export default function EditSchedulePage() {
 
                   <div className="grid grid-cols-1 gap-4">
                     {DAYS.map(day => (
-                      <div key={day} className="border-2 border-gray-200 rounded-xl overflow-hidden">
-                        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-3 flex items-center justify-between">
-                          <h3 className="font-bold text-white text-lg">{day}</h3>
-                          <span className="bg-white bg-opacity-20 text-white px-3 py-1 rounded-full text-sm font-semibold">
-                            {schedule[day]?.length || 0} workouts
-                          </span>
+                      <div 
+                        key={day} 
+                        className={`border-2 rounded-xl overflow-hidden transition-all ${
+                          restDays[day] ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                        }`}
+                      >
+                        {/* Day Header with Rest Toggle */}
+                        <div className={`px-4 py-3 flex items-center justify-between ${
+                          restDays[day] 
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
+                            : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                        }`}>
+                          <div className="flex items-center space-x-3">
+                            <h3 className="font-bold text-white text-lg">{day}</h3>
+                            {restDays[day] && (
+                              <span className="bg-white bg-opacity-20 text-white px-2 py-0.5 rounded text-xs font-semibold flex items-center">
+                                <Coffee size={12} className="mr-1" /> Rest Day
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="flex items-center space-x-3">
+                            {!restDays[day] && (
+                              <span className="bg-white bg-opacity-20 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                {schedule[day]?.length || 0} workouts
+                              </span>
+                            )}
+                            
+                            {/* Rest Day Toggle */}
+                            <label className="flex items-center cursor-pointer bg-black bg-opacity-20 rounded-lg px-2 py-1 hover:bg-opacity-30 transition-all">
+                              <input 
+                                type="checkbox" 
+                                className="hidden"
+                                checked={restDays[day] || false}
+                                onChange={() => toggleRestDay(day)}
+                              />
+                              <div className={`w-4 h-4 rounded-full border-2 border-white mr-2 flex items-center justify-center ${
+                                restDays[day] ? 'bg-white' : 'bg-transparent'
+                              }`}>
+                                {restDays[day] && <CheckCircle size={10} className="text-green-600" />}
+                              </div>
+                              <span className="text-white text-xs font-medium">Rest Day</span>
+                            </label>
+                          </div>
                         </div>
 
-                        <div
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, day)}
-                          className={`p-4 min-h-[120px] ${
-                            schedule[day]?.length === 0 ? 'bg-gray-50 border-2 border-dashed border-gray-300' : 'bg-white'
-                          }`}
-                        >
-                          {schedule[day]?.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-8">
-                              <Plus size={32} className="mb-2" />
-                              <p className="text-sm font-medium">Drag workouts here</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {(schedule[day] || []).map((workout, index) => (
-                                <div
-                                  key={workout.id}
-                                  draggable
-                                  onDragStart={(e) => handleScheduleDragStart(e, workout, day, index)}
-                                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                                  onDrop={(e) => handleDropOnWorkout(e, day, index)}
-                                  className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-all group cursor-move"
-                                >
-                                  <div className="flex-shrink-0 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
-                                    <GripVertical size={20} />
-                                  </div>
-                                  
-                                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                                    {index + 1}
-                                  </div>
-                                  
-                                  {workout.image_url ? (
-                                    <img src={workout.image_url} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
-                                  ) : (
-                                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
-                                      <Dumbbell size={24} className="text-purple-600" />
+                        {/* Drop Zone OR Rest Message */}
+                        {restDays[day] ? (
+                          <div className="p-6 flex flex-col items-center justify-center text-green-700 min-h-[120px]">
+                            <Coffee size={32} className="mb-2 opacity-50" />
+                            <p className="font-semibold">Recovery Day</p>
+                            <p className="text-xs opacity-75">No workouts scheduled</p>
+                          </div>
+                        ) : (
+                          <div
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, day)}
+                            className={`p-4 min-h-[120px] ${
+                              schedule[day]?.length === 0 ? 'bg-gray-50 border-2 border-dashed border-gray-300' : 'bg-white'
+                            }`}
+                          >
+                            {schedule[day]?.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center h-full text-gray-400 py-8">
+                                <Plus size={32} className="mb-2" />
+                                <p className="text-sm font-medium">Drag workouts here</p>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {(schedule[day] || []).map((workout, index) => (
+                                  <div
+                                    key={workout.id}
+                                    draggable
+                                    onDragStart={(e) => handleScheduleDragStart(e, workout, day, index)}
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                    onDrop={(e) => handleDropOnWorkout(e, day, index)}
+                                    className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-all group cursor-move"
+                                  >
+                                    <div className="flex-shrink-0 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
+                                      <GripVertical size={20} />
                                     </div>
-                                  )}
-                                  
-                                  <div className="flex-1">
-                                    <p className="font-semibold text-gray-900">{workout.workout_name}</p>
                                     
-                                    {isCardioWorkout(workout) ? (
-                                      <div className="flex items-center space-x-2 mt-2">
-                                        <Clock size={16} className="text-green-600" />
-                                        <label className="text-xs text-gray-600 font-medium">Duration:</label>
-                                        <input
-                                          type="number"
-                                          value={workout.duration || ''}
-                                          onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
-                                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                                          min="0"
-                                          onClick={(e) => e.stopPropagation()}
-                                        />
-                                        <span className="text-xs text-gray-600">min</span>
-                                      </div>
+                                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                                      {index + 1}
+                                    </div>
+                                    
+                                    {workout.image_url ? (
+                                      <img src={workout.image_url} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                                     ) : (
-                                      <div className="flex items-center space-x-3 mt-2">
-                                        <div className="flex items-center space-x-2">
-                                          <label className="text-xs text-gray-600 font-medium">Sets:</label>
-                                          <input
-                                            type="number"
-                                            value={workout.sets || ''}
-                                            onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
-                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                          <label className="text-xs text-gray-600 font-medium">Reps:</label>
-                                          <input
-                                            type="number"
-                                            value={workout.reps || ''}
-                                            onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
-                                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="0"
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
+                                      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
+                                        <Dumbbell size={24} className="text-purple-600" />
                                       </div>
                                     )}
-                                  </div>
+                                    
+                                    <div className="flex-1">
+                                      <p className="font-semibold text-gray-900">{workout.workout_name}</p>
+                                      
+                                      {isCardioWorkout(workout) ? (
+                                        <div className="flex items-center space-x-2 mt-2">
+                                          <Clock size={16} className="text-green-600" />
+                                          <label className="text-xs text-gray-600 font-medium">Duration:</label>
+                                          <input
+                                            type="number"
+                                            value={workout.duration || ''}
+                                            onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
+                                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                                            min="0"
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                          <span className="text-xs text-gray-600">min</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center space-x-3 mt-2">
+                                          <div className="flex items-center space-x-2">
+                                            <label className="text-xs text-gray-600 font-medium">Sets:</label>
+                                            <input
+                                              type="number"
+                                              value={workout.sets || ''}
+                                              onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
+                                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              min="0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <label className="text-xs text-gray-600 font-medium">Reps:</label>
+                                            <input
+                                              type="number"
+                                              value={workout.reps || ''}
+                                              onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
+                                              className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                              min="0"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => removeWorkout(day, workout.id)}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                  >
-                                    <Trash2 size={18} />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeWorkout(day, workout.id)}
+                                      className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

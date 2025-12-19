@@ -76,6 +76,14 @@ export default function AddSchedulePage() {
     }
   };
 
+  // Helper to check for cardio
+  const isCardioWorkout = (workout) => {
+    const workoutType = workout.workout_type?.workout_type?.toLowerCase();
+    if (workoutType === 'cardio' || workoutType === 'duration') return true;
+    if (workout.duration >= 0 && workout.sets === 0 && workout.reps === 0) return true;
+    return false;
+  };
+
   // Toggle Rest Day Logic
   const toggleRestDay = (day) => {
     setRestDays(prev => {
@@ -93,18 +101,9 @@ export default function AddSchedulePage() {
     });
   };
 
-  const isCardioWorkout = (workout) => {
-    const workoutType = workout.workout_type?.workout_type?.toLowerCase();
-    if (workoutType === 'cardio' || workoutType === 'duration') return true;
-    if (workout.duration >= 0 && workout.sets === 0 && workout.reps === 0) return true;
-    return false;
-  };
-
-  // --- Drag and Drop Handlers ---
-
   const handleDragStart = (e, workout) => {
     setDraggedWorkout(workout);
-    setDraggedFromDay(null);
+    setDraggedFromDay(null); 
     e.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -123,8 +122,11 @@ export default function AddSchedulePage() {
   const handleDrop = (e, day) => {
     e.preventDefault();
     
-    // Block drop if it's a rest day
-    if (restDays[day]) return;
+    // Prevent dropping on a Rest Day
+    if (restDays[day]) {
+      toast.error(`Cannot add workouts to ${day} (Rest Day)`);
+      return;
+    }
 
     if (draggedWorkout) {
       if (draggedFromDay) {
@@ -164,7 +166,6 @@ export default function AddSchedulePage() {
     e.preventDefault();
     e.stopPropagation();
     
-    // Block drop if it's a rest day
     if (restDays[day]) return;
 
     if (draggedWorkout && draggedFromDay === day && draggedIndex !== null) {
@@ -172,10 +173,7 @@ export default function AddSchedulePage() {
       const [movedWorkout] = dayWorkouts.splice(draggedIndex, 1);
       dayWorkouts.splice(targetIndex, 0, movedWorkout);
       
-      setSchedule(prev => ({
-        ...prev,
-        [day]: dayWorkouts
-      }));
+      setSchedule(prev => ({ ...prev, [day]: dayWorkouts }));
     }
     
     setDraggedWorkout(null);
@@ -222,13 +220,14 @@ export default function AddSchedulePage() {
     const newErrors = {};
     if (!formData.name) newErrors.name = 'Schedule name is required';
     
-    // Calculate total workouts ignoring rest days
+    // Count workouts (excluding rest days)
     const totalWorkouts = Object.values(schedule).reduce((sum, day) => sum + (day?.length || 0), 0);
-    
-    // It's valid to have a schedule with just rest days? Probably not helpful, but technically allowed. 
-    // Usually we want at least 1 workout in the whole week.
-    if (totalWorkouts === 0) {
-      newErrors.workouts = 'Add at least one workout to the schedule (non-rest days)';
+    // Count rest days
+    const totalRestDays = Object.values(restDays).filter(Boolean).length;
+
+    // Valid if at least one workout OR at least one rest day is set (basically schedule isn't empty)
+    if (totalWorkouts === 0 && totalRestDays === 0) {
+      newErrors.workouts = 'Please add workouts or set rest days';
     }
     
     setErrors(newErrors);
@@ -255,15 +254,22 @@ export default function AddSchedulePage() {
       const createdSchedule = await supabaseApi.createSchedule(scheduleData);
       const scheduleId = createdSchedule[0].id;
       
-      // Add workouts to schedule
       for (const day of DAYS) {
-        // If it's a rest day, we simply skip adding workouts for this day.
-        // The DB doesn't have an is_rest_day column for the master schedule details,
-        // so "Rest Day" effectively means "No Data" for that day.
-        if (restDays[day]) continue; 
+        // 1. Handle Rest Days
+        if (restDays[day]) {
+          await supabaseApi.createScheduleDetail({
+            schedule_id: scheduleId,
+            day: day,
+            is_rest_day: true,
+            workout_id: null, // No workout on rest day
+            order_index: 1,   // Dummy index
+            is_deleted: false,
+          });
+          continue; // Skip adding workouts for this day
+        }
 
+        // 2. Handle Workout Days
         const dayWorkouts = schedule[day] || [];
-        
         for (let i = 0; i < dayWorkouts.length; i++) {
           const workout = dayWorkouts[i];
           
@@ -275,6 +281,7 @@ export default function AddSchedulePage() {
             set_no: workout.sets.toString(),
             rep_no: workout.reps.toString(),
             duration_minutes: workout.duration.toString(),
+            is_rest_day: false,
             is_deleted: false,
           });
         }
@@ -333,7 +340,7 @@ export default function AddSchedulePage() {
                   </div>
                   <div className="flex-1">
                     <h1 className="text-3xl font-bold text-gray-900">Create Workout Schedule</h1>
-                    <p className="text-gray-600 mt-1">Drag and drop workouts or set days as "Rest" days</p>
+                    <p className="text-gray-600 mt-1">Drag and drop workouts or set rest days</p>
                   </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-500">Total Workouts</div>
@@ -358,7 +365,7 @@ export default function AddSchedulePage() {
                     className={`w-full px-4 py-3 border-2 ${
                       errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300'
                     } rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all`}
-                    placeholder="e.g., Beginner Full Body Workout, Advanced Strength Training"
+                    placeholder="e.g., Beginner Full Body Workout"
                   />
                   {errors.name && (
                     <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -390,19 +397,17 @@ export default function AddSchedulePage() {
                 <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-4">Available Workouts</h2>
                   
-                  {/* Search */}
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                     <input
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      className="w-full pl-10 pr-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Search workouts..."
                     />
                   </div>
 
-                  {/* Workout Cards */}
                   <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
                     {filteredWorkouts.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
@@ -419,11 +424,7 @@ export default function AddSchedulePage() {
                         >
                           <GripVertical size={20} className="text-gray-400 flex-shrink-0" />
                           {workout.image_url ? (
-                            <img
-                              src={workout.image_url}
-                              alt={workout.name}
-                              className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                            />
+                            <img src={workout.image_url} alt={workout.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                           ) : (
                             <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
                               <Dumbbell size={24} className="text-purple-600" />
@@ -474,28 +475,22 @@ export default function AddSchedulePage() {
                           restDays[day] ? 'border-green-200 bg-green-50' : 'border-gray-200'
                         }`}
                       >
-                        {/* Day Header */}
+                        {/* Day Header with Rest Toggle */}
                         <div className={`px-4 py-3 flex items-center justify-between ${
                           restDays[day] 
                             ? 'bg-gradient-to-r from-green-500 to-emerald-600' 
                             : 'bg-gradient-to-r from-blue-500 to-indigo-600'
                         }`}>
-                          <div className="flex items-center space-x-3">
-                            <h3 className="font-bold text-white text-lg">{day}</h3>
-                            {restDays[day] && (
-                              <span className="bg-white bg-opacity-20 text-white px-2 py-0.5 rounded text-xs font-semibold flex items-center">
-                                <Coffee size={12} className="mr-1" /> Rest Day
-                              </span>
-                            )}
-                          </div>
+                          <h3 className="font-bold text-white text-lg">{day}</h3>
                           
                           <div className="flex items-center space-x-3">
+                            {/* Workout Count (Hide on rest day) */}
                             {!restDays[day] && (
                               <span className="bg-white bg-opacity-20 text-white px-3 py-1 rounded-full text-sm font-semibold">
                                 {schedule[day]?.length || 0} workouts
                               </span>
                             )}
-                            
+
                             {/* Rest Day Toggle */}
                             <label className="flex items-center cursor-pointer bg-black bg-opacity-20 rounded-lg px-2 py-1 hover:bg-opacity-30 transition-all">
                               <input 
@@ -514,7 +509,7 @@ export default function AddSchedulePage() {
                           </div>
                         </div>
 
-                        {/* Drop Zone or Rest Message */}
+                        {/* Drop Zone OR Rest Message */}
                         {restDays[day] ? (
                           <div className="p-6 flex flex-col items-center justify-center text-green-700 min-h-[120px]">
                             <Coffee size={32} className="mb-2 opacity-50" />
@@ -543,29 +538,20 @@ export default function AddSchedulePage() {
                                     key={workout.id}
                                     draggable
                                     onDragStart={(e) => handleScheduleDragStart(e, workout, day, index)}
-                                    onDragOver={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                    }}
+                                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                     onDrop={(e) => handleDropOnWorkout(e, day, index)}
                                     className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-400 transition-all group cursor-move"
                                   >
-                                    {/* Drag Handle */}
                                     <div className="flex-shrink-0 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing">
                                       <GripVertical size={20} />
                                     </div>
                                     
-                                    {/* Order Number Badge */}
                                     <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
                                       {index + 1}
                                     </div>
                                     
                                     {workout.image_url ? (
-                                      <img
-                                        src={workout.image_url}
-                                        alt={workout.workout_name}
-                                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
-                                      />
+                                      <img src={workout.image_url} alt={workout.workout_name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                                     ) : (
                                       <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center flex-shrink-0">
                                         <Dumbbell size={24} className="text-purple-600" />
@@ -575,9 +561,7 @@ export default function AddSchedulePage() {
                                     <div className="flex-1">
                                       <p className="font-semibold text-gray-900">{workout.workout_name}</p>
                                       
-                                      {/* Conditional inputs based on workout type */}
                                       {isCardioWorkout(workout) ? (
-                                        // Duration input for cardio
                                         <div className="flex items-center space-x-2 mt-2">
                                           <Clock size={16} className="text-green-600" />
                                           <label className="text-xs text-gray-600 font-medium">Duration:</label>
@@ -587,13 +571,11 @@ export default function AddSchedulePage() {
                                             onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
                                             className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                                             min="0"
-                                            placeholder="0"
                                             onClick={(e) => e.stopPropagation()}
                                           />
                                           <span className="text-xs text-gray-600">min</span>
                                         </div>
                                       ) : (
-                                        // Sets and Reps inputs for strength training
                                         <div className="flex items-center space-x-3 mt-2">
                                           <div className="flex items-center space-x-2">
                                             <label className="text-xs text-gray-600 font-medium">Sets:</label>
@@ -603,7 +585,6 @@ export default function AddSchedulePage() {
                                               onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
                                               className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                               min="0"
-                                              placeholder="0"
                                               onClick={(e) => e.stopPropagation()}
                                             />
                                           </div>
@@ -615,7 +596,6 @@ export default function AddSchedulePage() {
                                               onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
                                               className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                               min="0"
-                                              placeholder="0"
                                               onClick={(e) => e.stopPropagation()}
                                             />
                                           </div>
@@ -648,7 +628,7 @@ export default function AddSchedulePage() {
               <button
                 onClick={handleSubmit}
                 disabled={saving}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center space-x-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 font-semibold disabled:opacity-50"
               >
                 <Save size={20} />
                 <span>{saving ? 'Creating Schedule...' : 'Create Schedule'}</span>
@@ -659,19 +639,6 @@ export default function AddSchedulePage() {
               >
                 Cancel
               </Link>
-            </div>
-
-            {/* Help Text */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-              <p className="text-sm text-blue-800">
-                <span className="font-semibold">💡 Tips:</span>
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-blue-700">
-                <li>• Toggle <strong>"Rest Day"</strong> to block workouts for that specific day.</li>
-                <li>• Drag workouts from the left sidebar and drop them onto any active day.</li>
-                <li>• Drag workouts within a day to reorder them.</li>
-                <li>• Remove workouts by clicking the trash icon that appears on hover.</li>
-              </ul>
             </div>
           </div>
         </main>
