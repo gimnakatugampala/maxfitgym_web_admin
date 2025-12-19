@@ -784,8 +784,10 @@ async updateWorkout(id, updates) {
 
   // Inside your supabaseApi object
 // Correct getMembers using your custom this.request wrapper
+// Updated: Fetch ALL members, including those marked as deleted (rejected)
   async getMembers() {
-    return this.request('/members?select=*,platform(name)&is_deleted=eq.false&order=created_date.desc');
+    // We removed "is_deleted=eq.false" so rejected users will now appear
+    return this.request('/members?select=*,platform(name)&order=created_date.desc');
   },
   // --- ADD THESE TO YOUR supabaseApi OBJECT ---
 
@@ -802,5 +804,36 @@ async updateWorkout(id, updates) {
   // Activate a member
   async activateMember(id) {
     return this.updateMember(id, { is_active: true });
+  },
+
+ // Fix: Use "Upsert" strategy to update without CORS errors or duplicates
+  async updateMember(id, data) {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('supabase_token') : null;
+
+    // 1. We include the 'id' in the body so Supabase knows which row to find.
+    const payload = { id, ...data };
+
+    // 2. We use POST (allowed by browser)
+    // 3. We add '?on_conflict=id' to tell Supabase "If this ID exists, update it"
+    // 4. We add 'Prefer: resolution=merge-duplicates' as a backup for older PostgREST versions
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/members?on_conflict=id`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${token || SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates,return=representation' 
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: 'Update failed' }));
+        console.error('Update failed:', error);
+        throw new Error(error.message || 'Failed to update member');
+    }
+
+    const result = await response.json();
+    return result[0]; // Upsert returns an array, we return the first item
   },
 };
