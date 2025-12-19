@@ -70,7 +70,19 @@ export default function AddSchedulePage() {
 
   // Helper function to check if workout is cardio/duration-based
   const isCardioWorkout = (workout) => {
-    return workout.duration > 0 || workout.workout_type?.workout_type?.toLowerCase() === 'cardio';
+    // Check workout type first (more reliable)
+    const workoutType = workout.workout_type?.workout_type?.toLowerCase();
+    if (workoutType === 'cardio' || workoutType === 'duration') {
+      return true;
+    }
+    
+    // Fallback: check if it has duration and no sets/reps
+    // This helps identify cardio workouts even if type isn't explicitly set
+    if (workout.duration >= 0 && workout.sets === 0 && workout.reps === 0) {
+      return true;
+    }
+    
+    return false;
   };
 
   const handleDragStart = (e, workout) => {
@@ -166,9 +178,26 @@ export default function AddSchedulePage() {
   const updateWorkout = (day, workoutId, field, value) => {
     setSchedule(prev => ({
       ...prev,
-      [day]: prev[day].map(w =>
-        w.id === workoutId ? { ...w, [field]: parseInt(value) || 0 } : w
-      )
+      [day]: prev[day].map(w => {
+        if (w.id === workoutId) {
+          // Handle empty string or invalid input
+          if (value === '' || value === null || value === undefined) {
+            return { ...w, [field]: 0 };
+          }
+          
+          // Parse the value and ensure it's a valid number
+          const numValue = parseInt(value, 10);
+          
+          // If parsing fails or results in NaN, default to 0
+          if (isNaN(numValue)) {
+            return { ...w, [field]: 0 };
+          }
+          
+          // Return the parsed number (which naturally removes leading zeros)
+          return { ...w, [field]: numValue };
+        }
+        return w;
+      })
     }));
   };
 
@@ -500,10 +529,11 @@ export default function AddSchedulePage() {
                                         <label className="text-xs text-gray-600 font-medium">Duration:</label>
                                         <input
                                           type="number"
-                                          value={workout.duration}
+                                          value={workout.duration || ''}
                                           onChange={(e) => updateWorkout(day, workout.id, 'duration', e.target.value)}
                                           className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                                          min="1"
+                                          min="0"
+                                          placeholder="0"
                                           onClick={(e) => e.stopPropagation()}
                                         />
                                         <span className="text-xs text-gray-600">min</span>
@@ -515,10 +545,11 @@ export default function AddSchedulePage() {
                                           <label className="text-xs text-gray-600 font-medium">Sets:</label>
                                           <input
                                             type="number"
-                                            value={workout.sets}
+                                            value={workout.sets || ''}
                                             onChange={(e) => updateWorkout(day, workout.id, 'sets', e.target.value)}
                                             className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="1"
+                                            min="0"
+                                            placeholder="0"
                                             onClick={(e) => e.stopPropagation()}
                                           />
                                         </div>
@@ -527,10 +558,11 @@ export default function AddSchedulePage() {
                                           <label className="text-xs text-gray-600 font-medium">Reps:</label>
                                           <input
                                             type="number"
-                                            value={workout.reps}
+                                            value={workout.reps || ''}
                                             onChange={(e) => updateWorkout(day, workout.id, 'reps', e.target.value)}
                                             className="w-16 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="1"
+                                            min="0"
+                                            placeholder="0"
                                             onClick={(e) => e.stopPropagation()}
                                           />
                                         </div>
