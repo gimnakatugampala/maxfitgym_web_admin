@@ -158,7 +158,7 @@ export default function AssignWorkoutSchedulePage() {
     }
   };
 
-  const loadScheduleDetails = async (scheduleId) => {
+ const loadScheduleDetails = async (scheduleId) => {
     try {
       setLoadingSchedule(true);
       const details = await supabaseApi.getScheduleDetails(scheduleId);
@@ -176,8 +176,9 @@ export default function AssignWorkoutSchedulePage() {
         workouts: (details || [])
           .filter(d => d.day === day && !d.is_rest_day)
           .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
-          .map(d => ({
-            id: Date.now() + Math.random(),
+          .map((d, index) => ({
+            // Use a simple counter for UI ID instead of timestamp
+            id: `${day}-${index}-${d.workout_id}`,
             workout_id: d.workout_id,
             workout_name: d.workout?.name || 'Unknown',
             original_sets: d.set_no ? parseInt(d.set_no) : 0,
@@ -410,7 +411,7 @@ export default function AssignWorkoutSchedulePage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+ const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!validateForm()) {
@@ -422,7 +423,7 @@ export default function AssignWorkoutSchedulePage() {
     const toastId = toast.loading('Assigning customized schedule...');
     
     try {
-      // Step 1: Create the assignment
+      // 1. Create the Member Schedule Wrapper
       const assignmentData = {
         member_id: parseInt(formData.member_id),
         schedule_id: parseInt(formData.schedule_id),
@@ -432,45 +433,61 @@ export default function AssignWorkoutSchedulePage() {
       };
       
       const assignment = await supabaseApi.assignScheduleToMember(assignmentData);
-      const memberScheduleId = assignment[0].id;
       
-      // Step 2: Create customized details for each day
+      // Handle response (Supabase returns array for select, or object depending on version)
+      const memberScheduleId = Array.isArray(assignment) ? assignment[0].id : assignment.id;
+
+      if (!memberScheduleId) throw new Error('Failed to create schedule record');
+
+      // 2. Create Details for each day
       for (const dayData of scheduleDetails) {
-        // Handle Rest Days
+        
+        // CASE A: Rest Day (or empty day)
         if (restDays[dayData.day] || (dayData.is_rest_day && dayData.workouts.length === 0)) {
           await supabaseApi.createMemberScheduleDetail({
             member_schedule_id: memberScheduleId,
-            schedule_detail_id: null,
+            schedule_detail_id: null, // No template link for rest days
+            workout_id: null,
+            day: dayData.day, // Save the day name
             is_rest_day: true,
             completed: false,
-            order_index: '1',
+            order_index: 1, 
             set_no: null,
             rep_no: null,
-            duration_minutes: null,
+            duration_minutes: null
           });
           continue;
         }
 
-        // Handle Workout Days
+        // CASE B: Workout Day
         for (let i = 0; i < dayData.workouts.length; i++) {
           const workout = dayData.workouts[i];
           
           await supabaseApi.createMemberScheduleDetail({
             member_schedule_id: memberScheduleId,
-            schedule_detail_id: workout.id,
-            set_no: workout.sets.toString(),
-            rep_no: workout.reps.toString(),
-            duration_minutes: workout.duration.toString(),
-            order_index: (i + 1).toString(),
+            
+            // IMPORTANT: Use the REAL workout ID, not the UI string ID
+            workout_id: workout.workout_id, 
+            day: dayData.day,
+            
+            // If this came from a template, we might not have the original detail ID 
+            // after dragging/dropping, so we set it to null for custom entries.
+            schedule_detail_id: null, 
+
+            set_no: workout.sets ? workout.sets.toString() : '0',
+            rep_no: workout.reps ? workout.reps.toString() : '0',
+            duration_minutes: workout.duration ? workout.duration.toString() : '0',
+            
+            order_index: i + 1,
             is_rest_day: false,
             completed: false
           });
         }
       }
       
-      toast.success('Customized schedule assigned successfully!', { id: toastId });
+      toast.success('Schedule assigned successfully!', { id: toastId });
       
-      // Reset form
+      // Reset Form
       setFormData({
         member_id: '',
         schedule_id: '',
@@ -481,8 +498,9 @@ export default function AssignWorkoutSchedulePage() {
       setRestDays({});
       setShowCustomization(false);
       
-      // Refresh assignments
+      // Refresh Data
       fetchData();
+
     } catch (error) {
       console.error('Error assigning schedule:', error);
       toast.error(error.message || 'Failed to assign schedule', { id: toastId });
@@ -607,44 +625,7 @@ export default function AssignWorkoutSchedulePage() {
                     </div>
                   </div>
 
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                    <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-5 border border-emerald-200/50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-emerald-700 text-sm font-semibold uppercase tracking-wide">Active</p>
-                          <p className="text-4xl font-bold text-emerald-900 mt-2">{activeCount}</p>
-                        </div>
-                        <div className="bg-emerald-100 p-3 rounded-xl">
-                          <PlayCircle className="w-6 h-6 text-emerald-600" />
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl p-5 border border-slate-200/50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-slate-600 text-sm font-semibold uppercase tracking-wide">Completed</p>
-                          <p className="text-4xl font-bold text-slate-800 mt-2">{completedCount}</p>
-                        </div>
-                        <div className="bg-slate-100 p-3 rounded-xl">
-                          <CheckCircle2 className="w-6 h-6 text-slate-600" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 border border-indigo-200/50">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-indigo-700 text-sm font-semibold uppercase tracking-wide">Total</p>
-                          <p className="text-4xl font-bold text-indigo-900 mt-2">{assignments.length}</p>
-                        </div>
-                        <div className="bg-indigo-100 p-3 rounded-xl">
-                          <TrendingUp className="w-6 h-6 text-indigo-600" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
