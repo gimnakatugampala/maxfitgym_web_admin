@@ -6,11 +6,10 @@ import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
 import TopNav from '@/app/components/TopNav';
 import LoadingSpinner from '../../../components/LoadingSpinner';
-import { Save, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Dumbbell, Target, Loader } from 'lucide-react';
+import { Save, ArrowLeft, Plus, X, Video, Upload, Image as ImageIcon, Dumbbell, Target, Loader, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { getYouTubeId } from '@/lib/utils';
 import toast from 'react-hot-toast';
-
 
 export default function EditWorkoutPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -18,11 +17,13 @@ export default function EditWorkoutPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [workoutTypes, setWorkoutTypes] = useState([]);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     sets: '',
     reps: '',
+    duration: '',
     workout_type_id: '1',
   });
   const [videoUrls, setVideoUrls] = useState(['']);
@@ -40,9 +41,21 @@ export default function EditWorkoutPage() {
       router.push('/login');
     } else {
       setUser(currentUser);
-      fetchWorkout();
+      fetchWorkoutTypes();
     }
   }, [router, params.id]);
+
+  const fetchWorkoutTypes = async () => {
+    try {
+      const types = await supabaseApi.getWorkoutTypes();
+      setWorkoutTypes(types || []);
+      // After fetching types, fetch the workout
+      fetchWorkout();
+    } catch (error) {
+      console.error('Error fetching workout types:', error);
+      setLoading(false);
+    }
+  };
 
   const fetchWorkout = async () => {
     try {
@@ -53,6 +66,7 @@ export default function EditWorkoutPage() {
           description: workout.description || '',
           sets: workout.sets || '',
           reps: workout.reps || '',
+          duration: workout.duration || '',
           workout_type_id: workout.workout_type_id || '1',
         });
         
@@ -69,6 +83,7 @@ export default function EditWorkoutPage() {
       }
     } catch (error) {
       console.error('Error fetching workout:', error);
+      toast.error('Failed to load workout');
     }
     setLoading(false);
   };
@@ -84,13 +99,11 @@ export default function EditWorkoutPage() {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         toast.error('Please select an image file (JPG, PNG, GIF, etc.)');
         return;
       }
       
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast.error('Image size should be less than 5MB');
         return;
@@ -98,7 +111,6 @@ export default function EditWorkoutPage() {
 
       setImageFile(file);
       
-      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
@@ -130,6 +142,18 @@ export default function EditWorkoutPage() {
     setVideoUrls(videoUrls.filter((_, i) => i !== index));
   };
 
+  // Check if selected workout type is "Duration" based (Cardio)
+  const isDurationBased = () => {
+    const selectedType = workoutTypes.find(t => t.id === parseInt(formData.workout_type_id));
+    return selectedType?.workout_type?.toLowerCase() === 'duration';
+  };
+
+  // Check if selected workout type is "Sets" based (Strength Training)
+  const isSetsBased = () => {
+    const selectedType = workoutTypes.find(t => t.id === parseInt(formData.workout_type_id));
+    return selectedType?.workout_type?.toLowerCase() === 'sets';
+  };
+
   const validateForm = () => {
     const newErrors = {};
     
@@ -137,12 +161,20 @@ export default function EditWorkoutPage() {
       newErrors.name = 'Workout name is required';
     }
     
-    if (!formData.sets || formData.sets < 1) {
-      newErrors.sets = 'Sets must be at least 1';
+    if (isSetsBased()) {
+      if (!formData.sets || formData.sets < 1) {
+        newErrors.sets = 'Sets must be at least 1';
+      }
+      
+      if (!formData.reps || formData.reps < 1) {
+        newErrors.reps = 'Reps must be at least 1';
+      }
     }
     
-    if (!formData.reps || formData.reps < 1) {
-      newErrors.reps = 'Reps must be at least 1';
+    if (isDurationBased()) {
+      if (!formData.duration || formData.duration < 1) {
+        newErrors.duration = 'Duration must be at least 1 minute';
+      }
     }
     
     setErrors(newErrors);
@@ -154,7 +186,7 @@ export default function EditWorkoutPage() {
     
     if (!validateForm()) {
       toast.error('Please fill in all required fields correctly');
-      return
+      return;
     }
     
     setSaving(true);
@@ -186,8 +218,9 @@ export default function EditWorkoutPage() {
       const workoutData = {
         name: formData.name,
         description: formData.description,
-        sets: parseInt(formData.sets),
-        reps: parseInt(formData.reps),
+        sets: isSetsBased() ? parseInt(formData.sets) : 0,
+        reps: isSetsBased() ? parseInt(formData.reps) : 0,
+        duration: isDurationBased() ? parseInt(formData.duration) : 0,
         workout_type_id: parseInt(formData.workout_type_id),
         image_url: imageUrl,
       };
@@ -235,7 +268,6 @@ export default function EditWorkoutPage() {
         
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gradient-to-br from-purple-50 to-pink-100 p-6">
           <div className="max-w-4xl mx-auto">
-            {/* Back Button */}
             <Link
               href="/workouts"
               className="inline-flex items-center text-purple-600 hover:text-purple-800 mb-6 transition-colors"
@@ -244,7 +276,6 @@ export default function EditWorkoutPage() {
               <span className="font-medium">Back to Workouts</span>
             </Link>
 
-            {/* Header Card */}
             <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
               <div className="flex items-center space-x-4 mb-2">
                 <div className="bg-gradient-to-br from-purple-500 to-pink-600 p-3 rounded-xl">
@@ -257,7 +288,6 @@ export default function EditWorkoutPage() {
               </div>
             </div>
 
-            {/* Form Card */}
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
               <div className="bg-gradient-to-r from-purple-500 to-pink-600 px-8 py-6">
                 <h2 className="text-xl font-semibold text-white">Workout Information</h2>
@@ -268,10 +298,10 @@ export default function EditWorkoutPage() {
                 <div className="space-y-6">
                   {/* Image Upload Section */}
                   <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 bg-gray-50">
-                  <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
-                    <ImageIcon size={18} className="mr-2 text-gray-500" />
-                    Workout Image
-                  </label>
+                    <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
+                      <ImageIcon size={18} className="mr-2 text-gray-500" />
+                      Workout Image
+                    </label>
                     
                     {!imagePreview ? (
                       <div className="text-center">
@@ -355,7 +385,7 @@ export default function EditWorkoutPage() {
                       className={`w-full px-4 py-3 border-2 ${
                         errors.name ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-purple-500'
                       } rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all`}
-                      placeholder="e.g., Push-ups, Squats, Bench Press"
+                      placeholder="e.g., Push-ups, Squats, Bench Press, Running"
                     />
                     {errors.name && (
                       <p className="text-red-500 text-xs mt-2 flex items-center">
@@ -380,61 +410,10 @@ export default function EditWorkoutPage() {
                     />
                   </div>
 
-                  {/* Sets and Reps */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
-                        <Target size={18} className="mr-2 text-gray-500" />
-                        Sets <span className="text-red-500 ml-1">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        name="sets"
-                        value={formData.sets}
-                        onChange={handleChange}
-                        min="1"
-                        className={`w-full px-4 py-3 border-2 ${
-                          errors.sets ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-purple-500'
-                        } rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all`}
-                        placeholder="3"
-                      />
-                      {errors.sets && (
-                        <p className="text-red-500 text-xs mt-2 flex items-center">
-                          <span className="mr-1">⚠</span>
-                          {errors.sets}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
-                        <Target size={18} className="mr-2 text-gray-500" />
-                        Reps <span className="text-red-500 ml-1">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        name="reps"
-                        value={formData.reps}
-                        onChange={handleChange}
-                        min="1"
-                        className={`w-full px-4 py-3 border-2 ${
-                          errors.reps ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-purple-500'
-                        } rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all`}
-                        placeholder="10"
-                      />
-                      {errors.reps && (
-                        <p className="text-red-500 text-xs mt-2 flex items-center">
-                          <span className="mr-1">⚠</span>
-                          {errors.reps}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
                   {/* Workout Type */}
                   <div>
                     <label className="block text-gray-700 text-sm font-bold mb-3">
-                      Workout Type
+                      Workout Type <span className="text-red-500 ml-1">*</span>
                     </label>
                     <select
                       name="workout_type_id"
@@ -442,18 +421,105 @@ export default function EditWorkoutPage() {
                       onChange={handleChange}
                       className="w-full px-4 py-3 border-2 border-gray-300 focus:border-purple-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all bg-white"
                     >
-                      <option value="1">Strength Training</option>
-                      <option value="2">Cardio</option>
-                      <option value="3">Flexibility</option>
-                      <option value="4">Balance</option>
+                      {workoutTypes.map(type => (
+                        <option key={type.id} value={type.id}>
+                          {type.workout_type}
+                        </option>
+                      ))}
                     </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {isSetsBased() && '📊 Sets-based workout (strength training)'}
+                      {isDurationBased() && '⏱️ Duration-based workout (cardio)'}
+                    </p>
                   </div>
 
-                  {/* Video URLs - same as Add page */}
+                  {/* Conditional Fields: Sets & Reps OR Duration */}
+                  {isSetsBased() && (
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-xl border-2 border-blue-200">
+                      <div>
+                        <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
+                          <Target size={18} className="mr-2 text-gray-500" />
+                          Sets <span className="text-red-500 ml-1">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          name="sets"
+                          value={formData.sets}
+                          onChange={handleChange}
+                          min="1"
+                          className={`w-full px-4 py-3 border-2 ${
+                            errors.sets ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-purple-500'
+                          } rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all`}
+                          placeholder="3"
+                        />
+                        {errors.sets && (
+                          <p className="text-red-500 text-xs mt-2 flex items-center">
+                            <span className="mr-1">⚠</span>
+                            {errors.sets}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
+                          <Target size={18} className="mr-2 text-gray-500" />
+                          Reps <span className="text-red-500 ml-1">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          name="reps"
+                          value={formData.reps}
+                          onChange={handleChange}
+                          min="1"
+                          className={`w-full px-4 py-3 border-2 ${
+                            errors.reps ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-purple-500'
+                          } rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-200 transition-all`}
+                          placeholder="10"
+                        />
+                        {errors.reps && (
+                          <p className="text-red-500 text-xs mt-2 flex items-center">
+                            <span className="mr-1">⚠</span>
+                            {errors.reps}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {isDurationBased() && (
+                    <div className="p-4 bg-green-50 rounded-xl border-2 border-green-200">
+                      <label className="flex items-center text-gray-700 text-sm font-bold mb-3">
+                        <Clock size={18} className="mr-2 text-gray-500" />
+                        Duration (minutes) <span className="text-red-500 ml-1">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        name="duration"
+                        value={formData.duration}
+                        onChange={handleChange}
+                        min="1"
+                        className={`w-full px-4 py-3 border-2 ${
+                          errors.duration ? 'border-red-500 bg-red-50' : 'border-gray-300 focus:border-green-500'
+                        } rounded-xl focus:outline-none focus:ring-2 focus:ring-green-200 transition-all`}
+                        placeholder="30"
+                      />
+                      {errors.duration && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <span className="mr-1">⚠</span>
+                          {errors.duration}
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-600 mt-2">
+                        Enter duration in minutes (e.g., 30 for 30 minutes of cardio)
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Video URLs */}
                   <div className="border-2 border-gray-200 rounded-2xl p-6 bg-gray-50">
                     <div className="flex items-center justify-between mb-4">
                       <label className="flex items-center text-gray-700 text-sm font-bold">
-                        <Upload size={18} className="mr-2 text-gray-500" />
+                        <Video size={18} className="mr-2 text-gray-500" />
                         Video URLs (YouTube)
                       </label>
                       <button
@@ -545,7 +611,7 @@ export default function EditWorkoutPage() {
                 {/* Help Text */}
                 <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-xl">
                   <p className="text-sm text-purple-800">
-                    <span className="font-semibold">💡 Tip:</span> Images are stored securely in Supabase Cloud Storage. Changing the image will automatically delete the old one.
+                    <span className="font-semibold">💡 Tip:</span> Choose "Sets" type for strength training workouts (push-ups, squats) and "Duration" type for cardio exercises (running, cycling). Images are stored securely in Supabase Cloud Storage.
                   </p>
                 </div>
               </form>

@@ -202,62 +202,97 @@ async request(endpoint, options = {}) {
     return data[0];
   },
 
- // ------------------------------------------------------------------
-  // CREATE WORKOUT (Auto-generate 'code' column: W_001)
-  // ------------------------------------------------------------------
-  async createWorkout(data) {
-    console.log('Step 1: Generating Workout Code...');
+ // Add this to your existing src/lib/supabase.js
 
-    try {
-      // 1. Fetch the last workout to find the highest code
-      // We select the 'code' column specifically
-      const lastRecord = await this.request('/workout?select=code&order=id.desc&limit=1');
+// Updated createWorkout function with duration support
+async createWorkout(data) {
+  console.log('Step 1: Generating Workout Code...');
 
-      let nextNum = 1;
+  try {
+    // 1. Fetch the last workout to find the highest code
+    const lastRecord = await this.request('/workout?select=code&order=id.desc&limit=1');
 
-      // If a previous record exists with a code, parse it
-      if (lastRecord && lastRecord.length > 0 && lastRecord[0].code) {
-        // Expected format: "W_001"
-        const parts = lastRecord[0].code.split('_'); 
-        if (parts.length === 2 && !isNaN(parts[1])) {
-          nextNum = parseInt(parts[1], 10) + 1;
-        }
+    let nextNum = 1;
+
+    if (lastRecord && lastRecord.length > 0 && lastRecord[0].code) {
+      const parts = lastRecord[0].code.split('_'); 
+      if (parts.length === 2 && !isNaN(parts[1])) {
+        nextNum = parseInt(parts[1], 10) + 1;
       }
-
-      // 2. Format the new code (e.g., 1 -> "W_001", 15 -> "W_015")
-      const newCode = `W_${String(nextNum).padStart(3, '0')}`;
-      console.log('Generated Code:', newCode);
-
-      // 3. Validate and Prepare Payload
-      const payload = {
-        ...data,
-        sets: Number(data.sets),
-        reps: Number(data.reps),
-        workout_type_id: Number(data.workout_type_id),
-        is_deleted: false,
-        code: newCode // <--- Saving to your existing 'code' column
-      };
-
-      console.log('Step 2: Sending POST request to Supabase...');
-      
-      const result = await this.request('/workout', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-
-      if (!result || result.length === 0) {
-        throw new Error('Workout created but no data returned. Check RLS policies.');
-      }
-
-      console.log('Step 3: Workout created successfully!', result[0]);
-      return result;
-
-    } catch (error) {
-      console.error('CRITICAL ERROR in createWorkout:', error);
-      throw error;
     }
-  },
 
+    const newCode = `W_${String(nextNum).padStart(3, '0')}`;
+    console.log('Generated Code:', newCode);
+
+    // 3. Validate and Prepare Payload with duration support
+    const payload = {
+      ...data,
+      sets: Number(data.sets) || 0,
+      reps: Number(data.reps) || 0,
+      duration: Number(data.duration) || 0, // Add duration field
+      workout_type_id: Number(data.workout_type_id),
+      is_deleted: false,
+      code: newCode
+    };
+
+    console.log('Step 2: Sending POST request to Supabase...');
+    
+    const result = await this.request('/workout', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    if (!result || result.length === 0) {
+      throw new Error('Workout created but no data returned. Check RLS policies.');
+    }
+
+    console.log('Step 3: Workout created successfully!', result[0]);
+    return result;
+
+  } catch (error) {
+    console.error('CRITICAL ERROR in createWorkout:', error);
+    throw error;
+  }
+},
+
+// Updated updateWorkout function with duration support
+async updateWorkout(id, updates) {
+  console.log('Step 1: Starting update for ID:', id);
+
+  try {
+    const currentData = await this.getWorkout(id);
+    
+    if (!currentData) {
+      throw new Error('Workout not found');
+    }
+
+    // Merge the existing data with the new updates
+    const payload = { ...currentData, ...updates };
+
+    // Clean the payload
+    delete payload.workout_type;
+    delete payload.video_count;
+    
+    // Ensure numeric fields are numbers
+    if (payload.sets) payload.sets = Number(payload.sets);
+    if (payload.reps) payload.reps = Number(payload.reps);
+    if (payload.duration) payload.duration = Number(payload.duration);
+    if (payload.workout_type_id) payload.workout_type_id = Number(payload.workout_type_id);
+
+    console.log('Step 2: Sending PUT request...');
+    const result = await this.request(`/workout?id=eq.${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+
+    console.log('Step 3: Workout updated successfully!');
+    return result;
+
+  } catch (error) {
+    console.error('CRITICAL ERROR in updateWorkout:', error);
+    throw error;
+  }
+},
   // ------------------------------------------------------------------
   // UPDATE WORKOUT (Using PUT to bypass CORS PATCH issues)
   // ------------------------------------------------------------------
