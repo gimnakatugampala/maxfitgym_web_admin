@@ -781,5 +781,10 @@ async updateWorkout(id, updates) {
     // Fetch sessions created after 24 hours ago
     return this.request(`/members_sessions?date=gte.${yesterday.toISOString()}&select=date`);
   },
-  
+
+  // Inside your supabaseApi object
+// Correct getMembers using your custom this.request wrapper
+  async getMembers() {
+    return this.request('/members?select=*,platform(name)&is_deleted=eq.false&order=created_date.desc');
+  },
 };
