@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react'; // 1. Import 'use'
 import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
@@ -19,6 +19,9 @@ import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/utils';
 
 export default function MemberStatsPage({ params }) {
+  // 2. Unwrap params using React.use()
+  const { id } = use(params);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [user, setUser] = useState(null);
   const [member, setMember] = useState(null);
@@ -37,7 +40,6 @@ export default function MemberStatsPage({ params }) {
   });
 
   const router = useRouter();
-  const { id } = params;
 
   useEffect(() => {
     const currentUser = supabaseApi.getUser();
@@ -85,10 +87,16 @@ export default function MemberStatsPage({ params }) {
       await supabaseApi.addBodyStats(id, formData);
       toast.success('Stats updated successfully!', { id: toastId });
       
-      // Clear values but keep date
-      setFormData(prev => ({ ...prev, weight: '', chest: '', bicep: '', hip: '' }));
+      // Clear form values but keep date
+      setFormData(prev => ({
+        ...prev,
+        weight: '',
+        chest: '',
+        bicep: '',
+        hip: ''
+      }));
 
-      // Refresh history
+      // Refresh data
       const newStats = await supabaseApi.getMemberStats(id);
       setStats(newStats);
     } catch (error) {
@@ -110,17 +118,11 @@ export default function MemberStatsPage({ params }) {
     );
   }
 
-  // Helper to get correct history array
+  // Determine current history based on tab
   const currentHistory = stats[activeTab] || [];
-  
-  // Helper to determine the unit (kg or inch)
-  const unit = activeTab === 'weight' ? 'kg' : 'in';
+  const unit = activeTab === 'weight' ? 'kg' : 'inch';
 
   // Helper to get the correct column name from your DB schema
-  // weight_progress -> weight_value
-  // chest_progress -> chest_value
-  // bicep_progress -> bicep_value
-  // hip_size_progress -> hip_value
   const getValueKey = (tab) => {
     if (tab === 'hip') return 'hip_value';
     return `${tab}_value`;
