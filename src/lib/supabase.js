@@ -973,4 +973,92 @@ async updateMemberScheduleDetail(id, data) {
 async deleteMemberScheduleDetail(id) {
   return this.updateMemberScheduleDetail(id, { is_deleted: true });
 },
+// --- Body Progress ---
+// --- Body Stats / Progress API ---
+
+  // 1. Fetch history for all body parts
+  async getMemberStats(memberId) {
+    try {
+      // Fetch data from all 4 tables in parallel
+      const [weight, chest, bicep, hip] = await Promise.all([
+        this.request(`/weight_progress?member_id=eq.${memberId}&order=date.desc`),
+        this.request(`/chest_progress?member_id=eq.${memberId}&order=date.desc`),
+        this.request(`/bicep_progress?member_id=eq.${memberId}&order=date.desc`),
+        this.request(`/hip_size_progress?member_id=eq.${memberId}&order=date.desc`),
+      ]);
+
+      return {
+        weight: weight || [],
+        chest: chest || [],
+        bicep: bicep || [],
+        hip: hip || []
+      };
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      return { weight: [], chest: [], bicep: [], hip: [] };
+    }
+  },
+
+  // 2. Save new stats (Splits data into the correct tables)
+  async addBodyStats(memberId, data) {
+    const date = data.date ? new Date(data.date).toISOString() : new Date().toISOString();
+    const promises = [];
+
+    // Table: weight_progress
+    if (data.weight) {
+      promises.push(this.request('/weight_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          member_id: parseInt(memberId),
+          weight_value: parseFloat(data.weight), // Numeric column
+          weight_kg: String(data.weight),        // Varchar column
+          date: date
+        })
+      }));
+    }
+
+    // Table: chest_progress
+    if (data.chest) {
+      promises.push(this.request('/chest_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          member_id: parseInt(memberId),
+          chest_value: parseFloat(data.chest),
+          chest_size_inch: String(data.chest),
+          date: date
+        })
+      }));
+    }
+
+    // Table: bicep_progress
+    if (data.bicep) {
+      promises.push(this.request('/bicep_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          member_id: parseInt(memberId),
+          bicep_value: parseFloat(data.bicep),
+          bicep_size_inch: String(data.bicep),
+          date: date
+        })
+      }));
+    }
+
+    // Table: hip_size_progress
+    if (data.hip) {
+      promises.push(this.request('/hip_size_progress', {
+        method: 'POST',
+        body: JSON.stringify({
+          member_id: parseInt(memberId),
+          hip_value: parseFloat(data.hip),
+          hip_size_inch: String(data.hip),
+          date: date
+        })
+      }));
+    }
+
+    if (promises.length === 0) return; // Nothing to save
+
+    await Promise.all(promises);
+    return true;
+  },
 };
