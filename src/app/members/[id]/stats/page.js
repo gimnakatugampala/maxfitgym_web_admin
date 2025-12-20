@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, use } from 'react'; // 1. Import 'use'
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import Sidebar from '@/app/components/Sidebar';
@@ -13,13 +13,13 @@ import {
   Save, 
   Calendar, 
   TrendingUp, 
-  Ruler 
+  Ruler,
+  User
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '@/lib/utils';
 
 export default function MemberStatsPage({ params }) {
-  // 2. Unwrap params using React.use()
   const { id } = use(params);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -30,7 +30,6 @@ export default function MemberStatsPage({ params }) {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('weight');
 
-  // Form State
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     weight: '',
@@ -40,6 +39,9 @@ export default function MemberStatsPage({ params }) {
   });
 
   const router = useRouter();
+
+  // Log the member ID to verify it's correct
+  console.log('Member ID from params:', id);
 
   useEffect(() => {
     const currentUser = supabaseApi.getUser();
@@ -53,15 +55,26 @@ export default function MemberStatsPage({ params }) {
 
   const fetchData = async () => {
     try {
-      const [memberData, statsData] = await Promise.all([
-        supabaseApi.getMember(id),
-        supabaseApi.getMemberStats(id)
-      ]);
+      console.log('Fetching member with ID:', id);
+      
+      // Fetch member data with detailed logging
+      const memberData = await supabaseApi.getMember(id);
+      console.log('Member Data Raw Response:', memberData);
+      
+      // Fetch stats data
+      const statsData = await supabaseApi.getMemberStats(id);
+      console.log('Stats Data:', statsData);
+      
+      if (!memberData) {
+        console.error('Member data is null/undefined. Member might not exist or might be marked as deleted.');
+        toast.error('Member not found. Please check if the member exists.');
+      }
+      
       setMember(memberData);
       setStats(statsData);
     } catch (error) {
       console.error('Error fetching data:', error);
-      toast.error('Failed to load data');
+      toast.error('Failed to load data: ' + error.message);
     }
     setLoading(false);
   };
@@ -74,7 +87,6 @@ export default function MemberStatsPage({ params }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Check if at least one metric is entered
     if (!formData.weight && !formData.chest && !formData.bicep && !formData.hip) {
       toast.error('Please enter at least one measurement');
       return;
@@ -87,7 +99,6 @@ export default function MemberStatsPage({ params }) {
       await supabaseApi.addBodyStats(id, formData);
       toast.success('Stats updated successfully!', { id: toastId });
       
-      // Clear form values but keep date
       setFormData(prev => ({
         ...prev,
         weight: '',
@@ -96,7 +107,6 @@ export default function MemberStatsPage({ params }) {
         hip: ''
       }));
 
-      // Refresh data
       const newStats = await supabaseApi.getMemberStats(id);
       setStats(newStats);
     } catch (error) {
@@ -118,11 +128,9 @@ export default function MemberStatsPage({ params }) {
     );
   }
 
-  // Determine current history based on tab
   const currentHistory = stats[activeTab] || [];
   const unit = activeTab === 'weight' ? 'kg' : 'inch';
 
-  // Helper to get the correct column name from your DB schema
   const getValueKey = (tab) => {
     if (tab === 'hip') return 'hip_value';
     return `${tab}_value`;
@@ -138,19 +146,38 @@ export default function MemberStatsPage({ params }) {
         <main className="flex-1 overflow-x-hidden overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto space-y-6">
             
-            {/* Header */}
-            <div className="flex items-center space-x-4">
-              <button 
-                onClick={() => router.back()}
-                className="p-2 rounded-full hover:bg-gray-200 transition-colors"
-              >
-                <ArrowLeft size={24} className="text-gray-600" />
-              </button>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Body Statistics</h1>
-                <p className="text-gray-600">
-                  Tracking progress for <span className="font-semibold text-blue-600">{member?.first_name} {member?.last_name}</span>
-                </p>
+            {/* Enhanced Header */}
+            <div className="bg-white rounded-2xl shadow-lg p-6">
+              <div className="flex items-center space-x-4">
+                <button 
+                  onClick={() => router.back()}
+                  className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+                >
+                  <ArrowLeft size={24} className="text-gray-600" />
+                </button>
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-xl">
+                      <Activity className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h1 className="text-3xl font-bold text-gray-900">
+                        {member ? `${member.first_name} ${member.last_name}` : 'Loading...'}
+                      </h1>
+                      <p className="text-gray-600 flex items-center space-x-2 mt-1">
+                        <TrendingUp size={16} className="text-blue-600" />
+                        <span>Body Statistics & Progress Tracking</span>
+                      </p>
+                    </div>
+                  </div>
+                  {member?.membership_id && (
+                    <div className="ml-16 flex items-center space-x-2 text-sm">
+                      <User size={14} className="text-gray-500" />
+                      <span className="text-gray-500">Member ID:</span>
+                      <span className="font-semibold text-blue-600">{member.membership_id}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 

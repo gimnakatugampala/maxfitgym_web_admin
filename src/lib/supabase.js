@@ -1061,4 +1061,35 @@ async deleteMemberScheduleDetail(id) {
     await Promise.all(promises);
     return true;
   },
+  // Replace the getMember function in your src/lib/supabase.js with this:
+
+async getMember(id) {
+  console.log('getMember called with ID:', id);
+  
+  try {
+    // Try WITHOUT the is_deleted filter first to see if member exists at all
+    const allMembers = await this.request(`/members?id=eq.${id}&select=*,platform(name)`);
+    console.log('All members query result:', allMembers);
+    
+    if (!allMembers || allMembers.length === 0) {
+      console.error('No member found with ID:', id);
+      return null;
+    }
+    
+    const member = allMembers[0];
+    console.log('Found member:', member);
+    
+    // Check if member is deleted
+    if (member.is_deleted === true) {
+      console.warn('Member is marked as deleted');
+      // You can choose to return null or return the member anyway for stats viewing
+      // For now, let's return it so you can view stats of deleted members
+    }
+    
+    return member;
+  } catch (error) {
+    console.error('Error in getMember:', error);
+    throw error;
+  }
+}
 };
