@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseApi } from '@/lib/supabase';
 import { Dumbbell, Eye, EyeOff } from 'lucide-react';
+import NextImage from 'next/image';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -32,8 +33,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-purple-600 p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-2xl p-8">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-4">
-            <Dumbbell className="w-10 h-10 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4">
+            <NextImage 
+               src="/images/logo.jpeg" 
+               alt="Maxfit VIP Gym Logo"
+               width={64}
+               height={64}
+               className="object-contain"
+               priority
+             />
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Maxfit VIP Gym</h1>
           <p className="text-gray-600 mt-2">Admin Dashboard</p>
@@ -93,7 +101,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-gray-600 text-sm mt-6">
-          Maxfit VIP Gym © 2025
+          Maxfit VIP Gym © 2026
         </p>
       </div>
     </div>

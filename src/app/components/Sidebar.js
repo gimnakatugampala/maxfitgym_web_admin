@@ -20,6 +20,8 @@ import {
   Clock
 } from 'lucide-react';
 
+import NextImage from 'next/image';
+
 export default function Sidebar({ isOpen, onClose }) {
   const pathname = usePathname();
   const [isMinimized, setIsMinimized] = useState(false);
@@ -120,9 +122,15 @@ const menuStructure = [
             <Menu size={20} />
           </button>
 
-          <div className="flex items-center space-x-3 overflow-hidden">
-            <div className="bg-blue-600 p-2 rounded-lg shrink-0">
-              <Dumbbell className="w-5 h-5 text-white" />
+      <div className="flex items-center space-x-3 overflow-hidden">
+            {/* Logo Image */}
+            <div className="relative w-8 h-8 shrink-0">
+              <NextImage 
+                src="/images/logo.jpeg" 
+                alt="Maxfit Logo" 
+                fill
+                className="object-contain rounded-lg"
+              />
             </div>
             {!isMinimized && (
               <span className="font-bold text-lg whitespace-nowrap transition-opacity duration-300">
